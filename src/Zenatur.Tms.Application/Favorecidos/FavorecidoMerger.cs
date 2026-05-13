@@ -1,32 +1,53 @@
 using Zenatur.Ciot.Client.Favorecidos;
+using Zenatur.Tms.Application.LegacyBridge;
 
 namespace Zenatur.Tms.Application.Favorecidos;
 
 /// <summary>
-/// Merge de dados do favorecido a partir das fontes disponíveis.
-/// Hoje: 1 fonte (CIOT API). Futuro (A14-A17): + LegacyBridge com prioridade em dados cadastrais.
+/// Merge de duas fontes do favorecido:
+/// 1. <see cref="ILegacyBridgeClient"/> — Bridge (SQL legado Zenatur): **prioridade em dados cadastrais** (Nome, RNTRC quando ativo).
+/// 2. <see cref="IFavorecidosClient"/> — CIOT API: **prioridade em meios de pagamento** (cartões/contas) e backup quando Bridge não tem.
 /// </summary>
 public static class FavorecidoMerger
 {
     /// <summary>
-    /// Converte resposta CIOT em <see cref="FavorecidoDto"/>. Retorna null se input nulo.
+    /// Merge das duas fontes. Retorna <c>null</c> se ambas vierem nulas/sem resultado.
     /// </summary>
-    public static FavorecidoDto? Merge(FindFavoredResponse? ciot, string documento)
+    public static FavorecidoDto? Merge(
+        FindFavoredResponse?     ciot,
+        MotoristaLegadoResponse? bridge,
+        string                   documento)
     {
-        if (ciot is null) return null;
+        if (ciot is null && bridge is null) return null;
+
+        // Nome: Bridge prioritário (sistema operacional Zenatur), fallback CIOT
+        var nome = Preferir(bridge?.Nome, ciot?.Nome);
+
+        // RNTRC: Bridge tem dado mais atualizado (ANTT direto), fallback CIOT
+        var rntrc         = Preferir(bridge?.Rntrc?.Numero, ciot?.RntrcCadastro);
+        var rntrcSituacao = bridge?.Rntrc?.Ativo == true ? "Ativo"
+                          : bridge?.Rntrc?.Ativo == false ? "Inativo"
+                          : ciot?.RntrcSituacao ?? "";
+
+        // Meios pagamento: CIOT é fonte de verdade (Bridge legado não tem essa info)
+        var meios = MapearMeiosCiot(ciot);
 
         return new FavorecidoDto
         {
             Documento      = documento,
-            Nome           = ciot.Nome,
-            Rntrc          = ciot.RntrcCadastro,
-            RntrcSituacao  = ciot.RntrcSituacao,
-            MeiosPagamento = MapearMeiosCiot(ciot),
+            Nome           = nome,
+            Rntrc          = rntrc,
+            RntrcSituacao  = rntrcSituacao,
+            MeiosPagamento = meios,
         };
     }
 
-    private static IReadOnlyList<MeioPagamentoDto> MapearMeiosCiot(FindFavoredResponse ciot)
+    private static string Preferir(string? primario, string? secundario) =>
+        !string.IsNullOrWhiteSpace(primario) ? primario : secundario ?? string.Empty;
+
+    private static IReadOnlyList<MeioPagamentoDto> MapearMeiosCiot(FindFavoredResponse? ciot)
     {
+        if (ciot is null) return [];
         var lista = new List<MeioPagamentoDto>();
         foreach (var c in ciot.Cartoes)
             lista.Add(new("Cartao", $"Cartão *{c.Numero[^4..]}", c.Numero));

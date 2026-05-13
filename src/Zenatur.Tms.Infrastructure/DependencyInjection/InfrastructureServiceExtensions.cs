@@ -12,6 +12,7 @@ using Zenatur.Tms.Infrastructure.Ciot;
 using Zenatur.Tms.Infrastructure.Domain;
 using Zenatur.Tms.Infrastructure.Favorecidos;
 using Zenatur.Tms.Infrastructure.Financeiro;
+using Zenatur.Tms.Infrastructure.LegacyBridge;
 using Zenatur.Tms.Infrastructure.Persistence;
 using Zenatur.Tms.Infrastructure.Security;
 
@@ -44,6 +45,9 @@ public static class InfrastructureServiceExtensions
 
         // HTTP client tipado para CIOT API (Polly retry + circuit breaker + ApiKey)
         services.AddCiotApiHttpClient(config);
+
+        // HTTP client tipado para LegacyBridge (A14-A17)
+        services.AddLegacyBridge(config);
 
         return services;
     }

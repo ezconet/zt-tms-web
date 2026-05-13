@@ -4,8 +4,10 @@
 @using Zenatur.Ciot.Client.Viagem
 @using Zenatur.Tms.Application.Domain
 @using Zenatur.Tms.Application.Favorecidos
+@using Zenatur.Tms.Application.LegacyBridge
 @using Zenatur.Tms.Application.State
 @inject ICiotClient CiotClient
+@inject ILegacyBridgeClient Bridge
 @inject IDomainService DomainService
 @inject CiotStateContainer State
 @inject ISnackbar Snackbar
@@ -47,7 +49,7 @@
             {
                 <MudItem xs="12">
                     <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-1" />
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">Buscando na API CIOT...</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Buscando em CIOT API + LegacyBridge...</MudText>
                 </MudItem>
             }
 
@@ -587,8 +589,8 @@
         {
             var docTipo  = documento.Length == 11 ? 1 : 2; // 1=CPF, 2=CNPJ
 
-            // 1 fonte hoje (CIOT). LegacyBridge entra como 2ª fonte em A14-A17 (BLOQUEADO).
-            var ciotResultRaw = await CiotClient.Favorecidos.FindAsync(new FindFavoredRequest
+            // 2 fontes em paralelo (CIOT + LegacyBridge)
+            var ciotTask = CiotClient.Favorecidos.FindAsync(new FindFavoredRequest
             {
                 ContratanteCnpj     = _vm.ContratanteCnpj ?? string.Empty,
                 FavorecidoDocNumero = documento,
@@ -596,23 +598,31 @@
                 ObterCartao         = true,
                 ObterConta          = true,
             });
+            var bridgeTask = documento.Length == 11
+                ? Bridge.GetMotoristaAsync(documento)
+                : Task.FromResult(FluentResults.Result.Ok<MotoristaLegadoResponse?>(null)); // Bridge só tem motorista (CPF) por enquanto
 
-            var ciotResult = ciotResultRaw.IsSuccess ? ciotResultRaw.Value : null;
+            await Task.WhenAll(ciotTask, bridgeTask);
 
-            if (ciotResult is not null) _fontesDados.Add("CIOT");
+            var ciotResult   = ciotTask.Result.IsSuccess   ? ciotTask.Result.Value   : null;
+            var bridgeResult = bridgeTask.Result.IsSuccess ? bridgeTask.Result.Value : null;
 
-            if (ciotResult is null)
+            if (ciotResult   is not null) _fontesDados.Add("CIOT");
+            if (bridgeResult is not null) _fontesDados.Add("Bridge");
+
+            if (ciotResult is null && bridgeResult is null)
             {
-                _erroFase1 = "Favorecido não encontrado na API CIOT.";
+                _erroFase1 = "Favorecido não encontrado em nenhuma das fontes (CIOT + LegacyBridge).";
                 return;
             }
 
-            _favorecido = FavorecidoMerger.Merge(ciotResult, documento);
+            _favorecido = FavorecidoMerger.Merge(ciotResult, bridgeResult, documento);
             if (_favorecido is null)
             {
                 _erroFase1 = "Favorecido não encontrado.";
                 return;
             }
+            _prioridadeBridge = bridgeResult is not null;
             _meiosFavorecido   = _favorecido.MeiosPagamento;
 
             _vm.FavorecidoDocumento = documento;
