@@ -1,0 +1,20 @@
+@page "/auth/required"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@layout Zenatur.Tms.Web.Components.Layout.EmptyLayout
+
+<PageTitle>Acesso necessário</PageTitle>
+
+<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; background:#F3F4F6; font-family:'Inter',sans-serif;">
+    <div style="background:white; padding:40px 56px; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.08); text-align:center; max-width:520px;">
+        <div style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#F56954,#AD1F0B); display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Style="color:white; font-size:36px;" />
+        </div>
+        <MudText Typo="Typo.h5" Style="color:#111827; font-weight:700;">Acesso restrito</MudText>
+        <MudText Typo="Typo.body2" Class="mt-2" Style="color:#6B7280;">
+            Este portal é acessado via Single Sign-On do sistema legado Zenatur. Acesse o portal principal e clique em "TMS" para entrar.
+        </MudText>
+        <MudText Typo="Typo.caption" Class="mt-4 d-block" Style="color:#9CA3AF;">
+            Erro: sessão não autenticada ou expirada.
+        </MudText>
+    </div>
+</div>

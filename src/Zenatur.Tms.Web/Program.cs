@@ -19,12 +19,22 @@ builder.Services.AddScoped<CiotStateContainer>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.LoginPath        = "/auth/external-login";
-        options.ExpireTimeSpan   = TimeSpan.FromHours(8);
+        // LoginPath: rota pública AllowAnonymous. NÃO pode ser /auth/external-login
+        // (que é POST-only do legado) — loop infinito.
+        options.LoginPath         = "/auth/required";
+        options.AccessDeniedPath  = "/auth/required";
+        options.ExpireTimeSpan    = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(o =>
+{
+    // Padrão: toda página/endpoint exige autenticação. Exceções via [AllowAnonymous].
+    o.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddTmsInfrastructure(builder.Configuration);
 
 var app = builder.Build();
@@ -41,7 +51,8 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapPost("/auth/external-login", ExternalLoginEndpoint.Handle)
-   .DisableAntiforgery();
+   .DisableAntiforgery()
+   .AllowAnonymous();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

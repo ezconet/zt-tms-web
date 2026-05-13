@@ -11,6 +11,7 @@
 @inject IDomainService DomainService
 @inject CiotStateContainer State
 @inject ISnackbar Snackbar
+@inject IWebHostEnvironment Env
 
 <MudStepper @bind-ActiveIndex="_faseIndex"
             NonLinear="false"
@@ -18,7 +19,7 @@
             Class="mb-4">
 
     @* ── FASE 1: Identificação ── *@
-    <MudStep Title="Identificação">
+    <MudStep Title="Identificação" HasError="@(!_fase1Valida && (_favorecido is not null || _erroFase1 is not null))">
         <MudGrid Spacing="3" Class="mt-2">
 
             <MudItem xs="12" md="6">
@@ -56,7 +57,12 @@
             @if (_erroFase1 is not null)
             {
                 <MudItem xs="12">
-                    <MudAlert Severity="Severity.Error" Dense="true">@_erroFase1</MudAlert>
+                    <MudAlert Severity="Severity.Error" Dense="false" Icon="@Icons.Material.Filled.Block">
+                        <strong>@_erroFase1</strong>
+                        <div style="margin-top:4px; font-size:12px;">
+                            Corrija o documento ou tente outro favorecido. Avançar está bloqueado.
+                        </div>
+                    </MudAlert>
                 </MudItem>
             }
 
@@ -113,8 +119,35 @@
                             {
                                 <MudItem xs="12">
                                     <MudAlert Severity="Severity.Warning" Dense="true">
-                                        RNTRC inativo — não é possível emitir CIOT para este favorecido.
+                                        RNTRC inativo.
+                                        @if (Env.IsDevelopment())
+                                        {
+                                            <strong> Modo DEV: validação será ignorada para permitir testes.</strong>
+                                        }
+                                        else
+                                        {
+                                            <text> Não é possível emitir CIOT.</text>
+                                        }
                                     </MudAlert>
+                                </MudItem>
+                            }
+
+                            @if (_veiculosBridge.Count > 0)
+                            {
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.caption" Style="color:#6B7280; margin-bottom:4px; display:block;">
+                                        Veículos vinculados ao motorista (Bridge) — primeiro pré-preenche Fase 2:
+                                    </MudText>
+                                    <MudChipSet T="string">
+                                        @foreach (var v in _veiculosBridge)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Label="true"
+                                                     Icon="@Icons.Material.Filled.LocalShipping"
+                                                     Style="background:#EFF6FF; color:#1D4ED8; font-size:11px; font-family:monospace;">
+                                                @v.Placa.ToUpper() · @(v.Marca ?? "")@(string.IsNullOrEmpty(v.Modelo) ? "" : " " + v.Modelo)
+                                            </MudChip>
+                                        }
+                                    </MudChipSet>
                                 </MudItem>
                             }
 
@@ -519,13 +552,19 @@
     private List<string> _fontesDados = [];
     private bool _prioridadeBridge; // futuro A14-A17: priority quando Bridge entrar
 
+    private bool _fase1Valida =>
+        !string.IsNullOrWhiteSpace(_vm.ContratanteCnpj) &&
+        _favorecido is not null &&
+        (_favorecido.RntrcAtivo || Env.IsDevelopment()); // dev bypass — bug 1.7
+
     private CancellationTokenSource? _debounce;
 
-    // ── Fase 2: domínios via DomainService (cache T17) ──
+    // ── Fase 2: domínios via DomainService (cache T17) + veículos do Bridge ──
     private IReadOnlyList<DomainItem>     _tiposVeiculo      = [];
     private IReadOnlyList<DomainItem>     _tiposCarga        = [];
     private IReadOnlyList<CidadeIbgeItem> _cidadesIbge       = [];
     private List<UnidadeMedidaItem>       _unidadesFiltradas = [];
+    private IReadOnlyList<VeiculoMotoristaItem> _veiculosBridge = [];
 
     // ── Fase 3: cultura BR para formatação + meios do favorecido ──
     private static readonly System.Globalization.CultureInfo _culturaBr = new("pt-BR");
@@ -598,8 +637,11 @@
                 ObterCartao         = true,
                 ObterConta          = true,
             });
-            // Bridge aceita CPF ou CNPJ via mesmo endpoint /motoristas (digits only)
-            var bridgeTask = Bridge.GetMotoristaAsync(documento);
+            // Bridge tem endpoint /motoristas (PF, 11 dígitos). PJ ainda não existe (spec §5.3).
+            // Para CNPJ pulamos Bridge — TMS usa apenas CIOT.
+            var bridgeTask = documento.Length == 11
+                ? Bridge.GetMotoristaAsync(documento)
+                : Task.FromResult(FluentResults.Result.Ok<MotoristaLegadoResponse?>(null));
 
             await Task.WhenAll(ciotTask, bridgeTask);
 
@@ -627,6 +669,15 @@
             _vm.FavorecidoDocumento = documento;
             _vm.FavorecidoNome      = _favorecido.Nome;
             _vm.FavorecidoRntrc     = _favorecido.Rntrc;
+
+            // Pré-popula Fase 2 com primeiro veículo do Bridge (se houver)
+            _veiculosBridge = bridgeResult?.Veiculos ?? [];
+            var v = _veiculosBridge.FirstOrDefault();
+            if (v is not null && string.IsNullOrEmpty(_vm.VeiculoPlaca))
+            {
+                _vm.VeiculoPlaca = v.Placa.Replace("-", "").ToUpperInvariant();
+                _vm.TipoVeiculo  = v.TipoVeiculo.ToString();
+            }
 
             // reset meio pagamento se já tinha selecionado e não está mais disponível
             if (!string.IsNullOrEmpty(_vm.MeioPagamento) &&
@@ -671,9 +722,14 @@
             }
             if (!_favorecido.RntrcAtivo)
             {
-                Snackbar.Add("RNTRC inativo — emissão não permitida.", Severity.Error);
-                args.Cancel = true;
-                return Task.CompletedTask;
+                if (!Env.IsDevelopment())
+                {
+                    Snackbar.Add("RNTRC inativo — emissão não permitida.", Severity.Error);
+                    args.Cancel = true;
+                    return Task.CompletedTask;
+                }
+                // Dev bypass — bug 1.7: legado sempre retorna ativo:null/false
+                Snackbar.Add("⚠ Modo DEV: RNTRC inativo ignorado.", Severity.Warning);
             }
             State.AvancarFase();
         }
