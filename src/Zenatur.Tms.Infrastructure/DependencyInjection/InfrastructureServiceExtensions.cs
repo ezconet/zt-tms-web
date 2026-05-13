@@ -38,6 +38,9 @@ public static class InfrastructureServiceExtensions
         services.AddDbContext<TmsDbContext>(options =>
             options.UseSqlServer(config.GetConnectionString("TmsDb")));
 
+        // HTTP client tipado para CIOT API (Polly retry + circuit breaker + ApiKey)
+        services.AddCiotApiHttpClient(config);
+
         return services;
     }
 }
