@@ -12,7 +12,6 @@ using Zenatur.Tms.Infrastructure.Ciot;
 using Zenatur.Tms.Infrastructure.Domain;
 using Zenatur.Tms.Infrastructure.Favorecidos;
 using Zenatur.Tms.Infrastructure.Financeiro;
-using Zenatur.Tms.Infrastructure.Pamcard;
 using Zenatur.Tms.Infrastructure.Persistence;
 using Zenatur.Tms.Infrastructure.Security;
 
@@ -37,8 +36,8 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IFinanceiroService,      CiotApiFinanceiroService>();
         services.AddScoped<IDomainService,          CiotApiDomainService>();
 
-        // IPamcardFavorecidoService mantido por enquanto (cleanup A13 — remove quando Bridge entrar)
-        services.AddScoped<IPamcardFavorecidoService, MockPamcardFavorecidoService>();
+        // IPamcardFavorecidoService removido em A13 — Pamcard é detalhe interno da CIOT API.
+        // Segunda fonte do merge (LegacyBridge) entra em A14-A17.
 
         services.AddDbContext<TmsDbContext>(options =>
             options.UseSqlServer(config.GetConnectionString("TmsDb")));

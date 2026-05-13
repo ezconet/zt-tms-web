@@ -6,7 +6,6 @@
 @using Zenatur.Tms.Application.Favorecidos
 @using Zenatur.Tms.Application.State
 @inject ICiotClient CiotClient
-@inject IPamcardFavorecidoService PamcardService
 @inject IDomainService DomainService
 @inject CiotStateContainer State
 @inject ISnackbar Snackbar
@@ -48,7 +47,7 @@
             {
                 <MudItem xs="12">
                     <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-1" />
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">Buscando em CIOT e Pamcard...</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Buscando na API CIOT...</MudText>
                 </MudItem>
             }
 
@@ -122,7 +121,7 @@
                                 <MudItem xs="12">
                                     <MudText Typo="Typo.caption" Style="color:#9CA3AF;">
                                         Dados de: @string.Join(" + ", _fontesDados)
-                                        @if (_prioridadePamcard){ <text> · Pamcard como fonte de verdade</text> }
+                                        @if (_prioridadeBridge){ <text> · LegacyBridge como fonte cadastral</text> }
                                     </MudText>
                                 </MudItem>
                             }
@@ -516,7 +515,7 @@
     private string? _protocoloEmitido;
     private FavorecidoDto? _favorecido;
     private List<string> _fontesDados = [];
-    private bool _prioridadePamcard;
+    private bool _prioridadeBridge; // futuro A14-A17: priority quando Bridge entrar
 
     private CancellationTokenSource? _debounce;
 
@@ -581,14 +580,15 @@
     {
         _buscando = true;
         _fontesDados = [];
-        _prioridadePamcard = false;
+        _prioridadeBridge = false;
         StateHasChanged();
 
         try
         {
             var docTipo  = documento.Length == 11 ? 1 : 2; // 1=CPF, 2=CNPJ
 
-            var ciotTask    = CiotClient.Favorecidos.FindAsync(new FindFavoredRequest
+            // 1 fonte hoje (CIOT). LegacyBridge entra como 2ª fonte em A14-A17 (BLOQUEADO).
+            var ciotResultRaw = await CiotClient.Favorecidos.FindAsync(new FindFavoredRequest
             {
                 ContratanteCnpj     = _vm.ContratanteCnpj ?? string.Empty,
                 FavorecidoDocNumero = documento,
@@ -596,29 +596,23 @@
                 ObterCartao         = true,
                 ObterConta          = true,
             });
-            var pamcardTask = PamcardService.FindAsync(documento);
 
-            await Task.WhenAll(ciotTask, pamcardTask);
+            var ciotResult = ciotResultRaw.IsSuccess ? ciotResultRaw.Value : null;
 
-            var ciotResult    = ciotTask.Result.IsSuccess ? ciotTask.Result.Value : null;
-            var pamcardResult = pamcardTask.Result;
+            if (ciotResult is not null) _fontesDados.Add("CIOT");
 
-            if (ciotResult    is not null) _fontesDados.Add("CIOT");
-            if (pamcardResult is not null) _fontesDados.Add("Pamcard");
-
-            if (ciotResult is null && pamcardResult is null)
+            if (ciotResult is null)
             {
-                _erroFase1 = "Favorecido não encontrado em nenhuma base de dados.";
+                _erroFase1 = "Favorecido não encontrado na API CIOT.";
                 return;
             }
 
-            _favorecido        = FavorecidoMerger.Merge(ciotResult, pamcardResult, documento);
+            _favorecido = FavorecidoMerger.Merge(ciotResult, documento);
             if (_favorecido is null)
             {
-                _erroFase1 = "Favorecido não encontrado em nenhuma base de dados.";
+                _erroFase1 = "Favorecido não encontrado.";
                 return;
             }
-            _prioridadePamcard = pamcardResult is not null && ciotResult is not null;
             _meiosFavorecido   = _favorecido.MeiosPagamento;
 
             _vm.FavorecidoDocumento = documento;
