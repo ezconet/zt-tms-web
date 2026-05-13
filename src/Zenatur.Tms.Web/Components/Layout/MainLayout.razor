@@ -1,0 +1,117 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@implements IDisposable
+
+<MudThemeProvider Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="0" Color="Color.Primary" Dense="false">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       Edge="Edge.Start"
+                       OnClick="ToggleDrawer" />
+        <span class="appbar-separator">|</span>
+        <MudText Typo="Typo.body1" Class="appbar-page-title">@_pageTitle</MudText>
+
+        <MudSpacer />
+
+        <MudBadge Dot="true" Color="Color.Surface" Overlap="true" Class="mr-2">
+            <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" />
+        </MudBadge>
+        <MudChip T="string" Class="zenatur-user-chip"
+                 Style="background:rgba(255,255,255,0.18); color:white; border:1px solid rgba(255,255,255,0.28);">
+            <AvatarContent>
+                <MudAvatar Style="background:rgba(255,255,255,0.3);color:white;">
+                    @_userInitials
+                </MudAvatar>
+            </AvatarContent>
+            <ChildContent>@_userName</ChildContent>
+        </MudChip>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen"
+               ClipMode="DrawerClipMode.Always"
+               Elevation="0"
+               Variant="DrawerVariant.Persistent">
+        <MudDrawerHeader Class="zenatur-drawer-header">
+            <img src="/zenatur-logo.png" alt="Zenatur" style="height:34px; object-fit:contain; flex-shrink:0;" />
+            <div class="ml-2">
+                <MudText Typo="Typo.subtitle2" Style="color:#FFFFFF; font-weight:700; line-height:1.2;">Zenatur TMS</MudText>
+                <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.55); font-size:9.5px; text-transform:uppercase; letter-spacing:0.9px;">Portal de Gestão</MudText>
+            </div>
+        </MudDrawerHeader>
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="pt-4 pb-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool   _drawerOpen   = true;
+    private string _userName     = "João Ferreira";
+    private string _userInitials = "JF";
+    private string _pageTitle    = "Home";
+
+    private static readonly Dictionary<string, string> _titulos = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["/"]                  = "Home",
+        ["/ciot/dashboard"]    = "Dashboard CIOT",
+        ["/ciot/emissor"]      = "Emissor de CIOT",
+        ["/ciot/favorecidos"]  = "Favorecidos",
+        ["/ciot/financeiro"]   = "Financeiro",
+    };
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary          = "#AD1F0B",
+            PrimaryDarken    = "#8A1809",
+            PrimaryLighten   = "#D32F1F",
+            Secondary        = "#D3260E",
+            AppbarBackground = "#AD1F0B",
+            AppbarText       = "#FFFFFF",
+            DrawerBackground = "#2d323d",
+            DrawerText       = "#9CA3AF",
+            DrawerIcon       = "#9CA3AF",
+            Background       = "#F3F4F6",
+            Surface          = "#FFFFFF",
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            AppbarHeight = "71px",
+        }
+    };
+
+    protected override void OnInitialized()
+    {
+        AtualizarTitulo(Nav.Uri);
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        AtualizarTitulo(e.Location);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void AtualizarTitulo(string uri)
+    {
+        var path = new Uri(uri, UriKind.RelativeOrAbsolute).IsAbsoluteUri
+            ? new Uri(uri).AbsolutePath
+            : uri;
+
+        _pageTitle = _titulos.TryGetValue(path, out var t) ? t : "Zenatur TMS";
+    }
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

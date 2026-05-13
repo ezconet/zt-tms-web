@@ -1,0 +1,94 @@
+@using Zenatur.Tms.Application.Financeiro
+
+<MudTable Items="Parcelas" Dense="true" Hover="true" Elevation="0"
+          RowStyle="font-size:13px;">
+    <HeaderContent>
+        <MudTh>Protocolo</MudTh>
+        <MudTh>Favorecido</MudTh>
+        <MudTh>Parcela</MudTh>
+        <MudTh>Vencimento</MudTh>
+        <MudTh Style="text-align:right;">Valor</MudTh>
+        <MudTh>Meio Pagamento</MudTh>
+        <MudTh>Status</MudTh>
+        @if (PermitirPagamento)
+        {
+            <MudTh Style="text-align:right;">Ações</MudTh>
+        }
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>
+            <MudText Typo="Typo.caption" Style="font-family:monospace; color:#6B7280;">@context.Protocolo</MudText>
+        </MudTd>
+        <MudTd><strong>@context.Favorecido</strong></MudTd>
+        <MudTd>
+            <MudChip T="string" Size="Size.Small" Label="true"
+                     Style="background:#F3F4F6; color:#374151; font-size:11px;">
+                @context.NumeroParcela / @context.TotalParcelas
+            </MudChip>
+        </MudTd>
+        <MudTd>
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.body2">@context.Vencimento.ToString("dd/MM/yyyy")</MudText>
+                @if (context.Status == "Pendente" && context.DiasAteVencimento >= 0)
+                {
+                    <MudText Typo="Typo.caption" Style="color:#6B7280;">em @context.DiasAteVencimento dia(s)</MudText>
+                }
+                else if (context.Status == "Vencida")
+                {
+                    <MudText Typo="Typo.caption" Style="color:#991B1B;">@(-context.DiasAteVencimento) dia(s) em atraso</MudText>
+                }
+                else if (context.DataPagamento is not null)
+                {
+                    <MudText Typo="Typo.caption" Style="color:#065F46;">pago em @context.DataPagamento.Value.ToString("dd/MM")</MudText>
+                }
+            </MudStack>
+        </MudTd>
+        <MudTd Style="text-align:right; font-weight:600;">@context.Valor.ToString("C", _culturaBr)</MudTd>
+        <MudTd>
+            <MudText Typo="Typo.caption">@(context.MeioPagamento ?? "—")</MudText>
+        </MudTd>
+        <MudTd>
+            <MudChip T="string" Size="Size.Small" Label="true" Style="@GetStatusStyle(context.Status)">
+                @context.Status
+            </MudChip>
+        </MudTd>
+        @if (PermitirPagamento)
+        {
+            <MudTd Style="text-align:right;">
+                @if (context.Status != "Paga")
+                {
+                    <MudButton Size="Size.Small"
+                               Variant="Variant.Outlined"
+                               Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.AttachMoney"
+                               OnClick="() => OnPagar.InvokeAsync(context)">
+                        Marcar Paga
+                    </MudButton>
+                }
+            </MudTd>
+        }
+    </RowTemplate>
+</MudTable>
+
+@if (Parcelas.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="ma-4">
+        Nenhuma parcela encontrada com os filtros aplicados.
+    </MudAlert>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ParcelaFinanceiraItem> Parcelas { get; set; } = [];
+    [Parameter] public bool PermitirPagamento { get; set; } = true;
+    [Parameter] public EventCallback<ParcelaFinanceiraItem> OnPagar { get; set; }
+
+    private static readonly System.Globalization.CultureInfo _culturaBr = new("pt-BR");
+
+    private static string GetStatusStyle(string status) => status switch
+    {
+        "Paga"     => "background:#D1FAE5; color:#065F46; font-size:11px;",
+        "Pendente" => "background:#FEF3C7; color:#92400E; font-size:11px;",
+        "Vencida"  => "background:#FEE2E2; color:#991B1B; font-size:11px;",
+        _          => "font-size:11px;"
+    };
+}

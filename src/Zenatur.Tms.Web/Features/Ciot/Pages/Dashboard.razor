@@ -1,0 +1,152 @@
+@page "/ciot/dashboard"
+@rendermode InteractiveServer
+
+<PageTitle>Dashboard CIOT</PageTitle>
+
+<!-- Breadcrumb -->
+<MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 mb-5" />
+
+<!-- KPIs -->
+<MudGrid Spacing="4" Class="mb-6">
+    <MudItem xs="12" sm="6" lg="3">
+        <div class="zt-kpi zt-kpi-red">
+            <div class="zt-kpi-label">CIOT Emitidos Hoje</div>
+            <div class="zt-kpi-value">@_emitidosHoje</div>
+            <div class="zt-kpi-delta zt-delta-up">
+                <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
+                +8 vs ontem
+            </div>
+        </div>
+    </MudItem>
+    <MudItem xs="12" sm="6" lg="3">
+        <div class="zt-kpi zt-kpi-blue">
+            <div class="zt-kpi-label">Emissões no Mês</div>
+            <div class="zt-kpi-value">@_emitidosMes</div>
+            <div class="zt-kpi-delta zt-delta-up">
+                <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
+                +12% vs mês ant.
+            </div>
+        </div>
+    </MudItem>
+    <MudItem xs="12" sm="6" lg="3">
+        <div class="zt-kpi zt-kpi-green">
+            <div class="zt-kpi-label">Valor Total (Mês)</div>
+            <div class="zt-kpi-value zt-kpi-value-sm">@_valorTotal.ToString("C0")</div>
+            <div class="zt-kpi-delta zt-delta-up">
+                <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
+                +5,3%
+            </div>
+        </div>
+    </MudItem>
+    <MudItem xs="12" sm="6" lg="3">
+        <div class="zt-kpi zt-kpi-amber">
+            <div class="zt-kpi-label">Pendentes Pagamento</div>
+            <div class="zt-kpi-value">@_pendentes</div>
+            <div class="zt-kpi-delta zt-delta-warn">
+                <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                Requer atenção
+            </div>
+        </div>
+    </MudItem>
+</MudGrid>
+
+<!-- Tabela emissões recentes -->
+<MudCard Elevation="1" Style="border-radius:12px; overflow:hidden;">
+    <div class="zt-card-header">
+        <span style="display:flex; align-items:center; gap:8px;">
+            <MudIcon Icon="@Icons.Material.Filled.ListAlt" Size="Size.Small" />
+            Emissões Recentes
+        </span>
+        <MudButton Variant="Variant.Outlined"
+                   Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Href="/ciot/emissor"
+                   Style="border-color:rgba(0,0,0,0.2); color:#1f2937; font-size:12px;">
+            Nova Emissão
+        </MudButton>
+    </div>
+    <MudCardContent Class="pa-0">
+        <MudTable Items="_emissoes"
+                  Hover="true"
+                  Dense="true"
+                  Elevation="0"
+                  RowStyle="font-size:13px;"
+                  Style="border-radius:0;">
+            <HeaderContent>
+                <MudTh>Protocolo</MudTh>
+                <MudTh>Favorecido</MudTh>
+                <MudTh>Rota</MudTh>
+                <MudTh>Valor Frete</MudTh>
+                <MudTh>Data</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudText Typo="Typo.caption" Style="font-family:monospace; color:#6B7280;">
+                        @context.Protocolo
+                    </MudText>
+                </MudTd>
+                <MudTd><strong>@context.Favorecido</strong></MudTd>
+                <MudTd>@context.Rota</MudTd>
+                <MudTd>@context.ValorFrete.ToString("C")</MudTd>
+                <MudTd>@context.Data.ToString("dd/MM/yyyy")</MudTd>
+                <MudTd>
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Style="@GetStatusStyle(context.Status)"
+                             Label="true">
+                        @context.Status
+                    </MudChip>
+                </MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                   Size="Size.Small"
+                                   Color="Color.Default" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private int _emitidosHoje = 24;
+    private int _emitidosMes  = 382;
+    private decimal _valorTotal = 1_240_000m;
+    private int _pendentes    = 15;
+
+    private readonly List<BreadcrumbItem> _breadcrumbs =
+    [
+        new("Home",      href: "/",               icon: Icons.Material.Filled.Home),
+        new("CIOT",      href: null,              disabled: true),
+        new("Dashboard", href: "/ciot/dashboard", disabled: false),
+    ];
+
+    private List<EmissaoRow> _emissoes =
+    [
+        new("CIOT-2026-00382", "Carlos Mendes",   "SP → RJ", 4_200m,  new DateTime(2026,5,12), "Emitido"),
+        new("CIOT-2026-00381", "Antônio Silva",   "MG → ES", 2_850m,  new DateTime(2026,5,12), "Pendente"),
+        new("CIOT-2026-00380", "Maria Oliveira",  "PR → SC", 1_920m,  new DateTime(2026,5,11), "Emitido"),
+        new("CIOT-2026-00379", "Roberto Faria",   "RS → SP", 6_100m,  new DateTime(2026,5,11), "Cancelado"),
+        new("CIOT-2026-00378", "Fernanda Costa",  "BA → RJ", 5_500m,  new DateTime(2026,5,10), "Emitido"),
+        new("CIOT-2026-00377", "Paulo Rodrigues", "GO → SP", 3_300m,  new DateTime(2026,5,10), "Pendente"),
+        new("CIOT-2026-00376", "Juliana Melo",    "CE → RJ", 7_800m,  new DateTime(2026,5,9),  "Emitido"),
+    ];
+
+    private static string GetStatusStyle(string status) => status switch
+    {
+        "Emitido"   => "background:#D1FAE5; color:#065F46; font-size:11.5px; font-weight:600; height:22px;",
+        "Pendente"  => "background:#FEF3C7; color:#92400E; font-size:11.5px; font-weight:600; height:22px;",
+        "Cancelado" => "background:#FEE2E2; color:#991B1B; font-size:11.5px; font-weight:600; height:22px;",
+        _           => "font-size:11.5px; height:22px;"
+    };
+
+    private record EmissaoRow(
+        string   Protocolo,
+        string   Favorecido,
+        string   Rota,
+        decimal  ValorFrete,
+        DateTime Data,
+        string   Status
+    );
+}

@@ -1,0 +1,169 @@
+@page "/ciot/financeiro"
+@rendermode InteractiveServer
+@using Zenatur.Tms.Application.Financeiro
+@using Zenatur.Tms.Web.Features.Ciot.Components
+@inject IFinanceiroService Service
+@inject ISnackbar Snackbar
+
+<PageTitle>Financeiro</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 mb-5" />
+
+<!-- KPIs -->
+<MudGrid Spacing="4" Class="mb-6">
+    <MudItem xs="12" sm="6" lg="3">
+        <div class="zt-kpi zt-kpi-red">
+            <div class="zt-kpi-label">Total Vencido</div>
+            <div class="zt-kpi-value zt-kpi-value-sm">@_resumo.TotalVencido.ToString("C", _culturaBr)</div>
+            <div class="zt-kpi-delta zt-delta-warn">
+                <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                @_resumo.QtdVencidas parcela(s)
+            </div>
+        </div>
+    </MudItem>
+    <MudItem xs="12" sm="6" lg="3">
+        <div class="zt-kpi zt-kpi-amber">
+            <div class="zt-kpi-label">Próximos 7 dias</div>
+            <div class="zt-kpi-value zt-kpi-value-sm">@_resumo.TotalProximos7d.ToString("C", _culturaBr)</div>
+            <div class="zt-kpi-delta zt-delta-warn">
+                <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
+                Atenção
+            </div>
+        </div>
+    </MudItem>
+    <MudItem xs="12" sm="6" lg="3">
+        <div class="zt-kpi zt-kpi-blue">
+            <div class="zt-kpi-label">Total a Pagar</div>
+            <div class="zt-kpi-value zt-kpi-value-sm">@_resumo.TotalAPagar.ToString("C", _culturaBr)</div>
+            <div class="zt-kpi-delta">@_resumo.QtdPendentes pendente(s)</div>
+        </div>
+    </MudItem>
+    <MudItem xs="12" sm="6" lg="3">
+        <div class="zt-kpi zt-kpi-green">
+            <div class="zt-kpi-label">Pago no Mês</div>
+            <div class="zt-kpi-value zt-kpi-value-sm">@_resumo.PagoNoMes.ToString("C", _culturaBr)</div>
+            <div class="zt-kpi-delta zt-delta-up">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                Quitado
+            </div>
+        </div>
+    </MudItem>
+</MudGrid>
+
+<!-- Card com filtros + grid -->
+<MudCard Elevation="1" Style="border-radius:12px; overflow:hidden;">
+    <div class="zt-card-header">
+        <span style="display:flex; align-items:center; gap:8px;">
+            <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Small" />
+            Parcelas
+        </span>
+    </div>
+
+    <MudCardContent Class="pa-0">
+        <div class="pa-4" style="border-bottom:1px solid #F3F4F6;">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_filtro.Termo" @bind-Value:after="Filtrar"
+                                  Placeholder="Buscar por favorecido ou protocolo..."
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" />
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudSelect T="string" @bind-Value="_filtro.Status" @bind-Value:after="Filtrar"
+                               Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        <MudSelectItem T="string" Value="@(null)">Todos</MudSelectItem>
+                        <MudSelectItem Value="@("Pendente")">Pendentes</MudSelectItem>
+                        <MudSelectItem Value="@("Vencida")">Vencidas</MudSelectItem>
+                        <MudSelectItem Value="@("Paga")">Pagas</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudDatePicker @bind-Date="_filtro.DataDe" @bind-Date:after="Filtrar"
+                                   Label="Vence de" DateFormat="dd/MM/yyyy"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudDatePicker @bind-Date="_filtro.DataAte" @bind-Date:after="Filtrar"
+                                   Label="Vence até" DateFormat="dd/MM/yyyy"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                </MudItem>
+                <MudItem xs="12" md="1" Class="d-flex justify-end">
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                                   OnClick="LimparFiltros"
+                                   Color="Color.Default" />
+                </MudItem>
+            </MudGrid>
+        </div>
+
+        @if (_carregando)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <ParcelasGrid Parcelas="_parcelas" OnPagar="MarcarPaga" PermitirPagamento="true" />
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private static readonly System.Globalization.CultureInfo _culturaBr = new("pt-BR");
+
+    private FiltroParcelas _filtro = new();
+    private List<ParcelaFinanceiraItem> _parcelas = [];
+    private ResumoFinanceiro _resumo = new();
+    private bool _carregando;
+
+    private readonly List<BreadcrumbItem> _breadcrumbs =
+    [
+        new("Home",        href: "/",                icon: Icons.Material.Filled.Home),
+        new("CIOT",        href: null,               disabled: true),
+        new("Financeiro",  href: "/ciot/financeiro", disabled: false),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarTudoAsync();
+    }
+
+    private async Task CarregarTudoAsync()
+    {
+        _carregando = true;
+        try
+        {
+            var listaTask  = Service.ListarAsync(_filtro);
+            var resumoTask = Service.ObterResumoAsync();
+            await Task.WhenAll(listaTask, resumoTask);
+            _parcelas = listaTask.Result.ToList();
+            _resumo   = resumoTask.Result;
+        }
+        finally
+        {
+            _carregando = false;
+        }
+    }
+
+    private Task Filtrar() => CarregarTudoAsync();
+
+    private async Task LimparFiltros()
+    {
+        _filtro = new FiltroParcelas();
+        await CarregarTudoAsync();
+    }
+
+    private async Task MarcarPaga(ParcelaFinanceiraItem parcela)
+    {
+        var ok = await Service.MarcarPagaAsync(parcela.Id);
+        if (ok)
+        {
+            Snackbar.Add($"Parcela {parcela.NumeroParcela}/{parcela.TotalParcelas} de {parcela.Favorecido} marcada como paga.", Severity.Success);
+            await CarregarTudoAsync();
+        }
+        else
+        {
+            Snackbar.Add("Falha ao marcar parcela como paga.", Severity.Error);
+        }
+    }
+}

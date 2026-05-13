@@ -1,0 +1,948 @@
+@using Zenatur.Ciot.Client
+@using Zenatur.Ciot.Client.Favorecidos
+@using Zenatur.Ciot.Client.Shared
+@using Zenatur.Ciot.Client.Viagem
+@using Zenatur.Tms.Application.Domain
+@using Zenatur.Tms.Application.Favorecidos
+@using Zenatur.Tms.Application.State
+@inject ICiotClient CiotClient
+@inject IPamcardFavorecidoService PamcardService
+@inject IDomainService DomainService
+@inject CiotStateContainer State
+@inject ISnackbar Snackbar
+
+<MudStepper @bind-ActiveIndex="_faseIndex"
+            NonLinear="false"
+            OnPreviewInteraction="OnStepperPreview"
+            Class="mb-4">
+
+    @* ── FASE 1: Identificação ── *@
+    <MudStep Title="Identificação">
+        <MudGrid Spacing="3" Class="mt-2">
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_vm.ContratanteCnpj"
+                              Label="CNPJ Contratante (Zenatur)"
+                              Variant="Variant.Outlined"
+                              Placeholder="Apenas números — 14 dígitos"
+                              HelperText="CNPJ da unidade Zenatur emissora"
+                              Immediate="true"
+                              Required="true" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_documentoBusca"
+                              Label="CPF / CNPJ do Favorecido"
+                              Variant="Variant.Outlined"
+                              Placeholder="Apenas números — 11 (CPF) ou 14 (CNPJ)"
+                              HelperText="Digite para buscar automaticamente"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_buscando ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.Search)"
+                              AdornmentColor="Color.Primary"
+                              Immediate="true"
+                              Required="true"
+                              TextChanged="OnDocumentoChanged" />
+            </MudItem>
+
+            @if (_buscando)
+            {
+                <MudItem xs="12">
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-1" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Buscando em CIOT e Pamcard...</MudText>
+                </MudItem>
+            }
+
+            @if (_erroFase1 is not null)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Error" Dense="true">@_erroFase1</MudAlert>
+                </MudItem>
+            }
+
+            @{ var fav = _favorecido; }
+            @if (fav is not null && !_buscando)
+            {
+                <MudItem xs="12">
+                    <MudPaper Elevation="0" Class="pa-4"
+                              Style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px;">
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.overline"
+                                         Style="color:#9CA3AF; font-size:10px; letter-spacing:1px;">
+                                    FAVORECIDO ENCONTRADO
+                                    <MudChip T="string" Size="Size.Small" Label="true"
+                                             Style="@GetRntrcBadgeStyle()">
+                                        @(fav.RntrcAtivo ? "RNTRC Ativo" : "RNTRC Inativo")
+                                    </MudChip>
+                                </MudText>
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudText Typo="Typo.caption" Style="color:#6B7280;">Nome</MudText>
+                                <MudText Typo="Typo.body1" Style="font-weight:600;">@fav.Nome</MudText>
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudText Typo="Typo.caption" Style="color:#6B7280;">Documento</MudText>
+                                <MudText Typo="Typo.body1" Style="font-family:monospace;">@FormatDocumento(fav.Documento)</MudText>
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudText Typo="Typo.caption" Style="color:#6B7280;">RNTRC</MudText>
+                                <MudText Typo="Typo.body1" Style="font-family:monospace;">@fav.Rntrc</MudText>
+                            </MudItem>
+
+                            @if (fav.MeiosPagamento is { Count: > 0 } meios)
+                            {
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.caption" Style="color:#6B7280; margin-bottom:4px; display:block;">
+                                        Meios de Pagamento Disponíveis
+                                    </MudText>
+                                    <MudChipSet T="string">
+                                        @foreach (var mp in meios)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Label="true"
+                                                     Icon="@(mp.Tipo == "Cartao" ? Icons.Material.Filled.CreditCard : Icons.Material.Filled.AccountBalance)"
+                                                     Style="background:#EFF6FF; color:#1D4ED8; font-size:11px;">
+                                                @mp.Descricao
+                                            </MudChip>
+                                        }
+                                    </MudChipSet>
+                                </MudItem>
+                            }
+
+                            @if (!fav.RntrcAtivo)
+                            {
+                                <MudItem xs="12">
+                                    <MudAlert Severity="Severity.Warning" Dense="true">
+                                        RNTRC inativo — não é possível emitir CIOT para este favorecido.
+                                    </MudAlert>
+                                </MudItem>
+                            }
+
+                            @if (_fontesDados.Count > 0)
+                            {
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.caption" Style="color:#9CA3AF;">
+                                        Dados de: @string.Join(" + ", _fontesDados)
+                                        @if (_prioridadePamcard){ <text> · Pamcard como fonte de verdade</text> }
+                                    </MudText>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudPaper>
+                </MudItem>
+            }
+
+        </MudGrid>
+    </MudStep>
+
+    @* ── FASE 2: Logística e Veículo ── *@
+    <MudStep Title="Logística">
+        <MudGrid Spacing="3" Class="mt-2">
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_vm.TipoVeiculo"
+                           Label="Tipo de Veículo"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           HelperText="Categoria do veículo">
+                    @foreach (var v in _tiposVeiculo)
+                    {
+                        <MudSelectItem Value="@v.Codigo">@v.Descricao</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_vm.VeiculoPlaca" @bind-Value:after="OnPlacaChanged"
+                              Label="Placa do Veículo (Cavalo)"
+                              Variant="Variant.Outlined"
+                              Placeholder="ABC1D23 ou ABC-1D23"
+                              HelperText="Mercosul — 7 caracteres alfanuméricos"
+                              Immediate="true"
+                              Required="true" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_vm.TipoCarga" @bind-Value:after="OnTipoCargaChanged"
+                           Label="Tipo de Carga"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           HelperText="Domínio 14 — filtra Unidade de Medida">
+                    @foreach (var tc in _tiposCarga)
+                    {
+                        <MudSelectItem Value="@tc.Codigo">@tc.Descricao</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_vm.UnidadeMedida"
+                           Label="Unidade de Medida"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           Disabled="@(string.IsNullOrEmpty(_vm.TipoCarga))"
+                           HelperText="@(_unidadesFiltradas.Count == 0 ? "Selecione o Tipo de Carga primeiro" : $"{_unidadesFiltradas.Count} opções disponíveis")">
+                    @foreach (var um in _unidadesFiltradas)
+                    {
+                        <MudSelectItem Value="@um.Codigo">@um.Descricao</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider Class="my-1" />
+                <MudText Typo="Typo.overline" Style="color:#6B7280; font-size:10px; letter-spacing:1px;">
+                    ROTA
+                </MudText>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_vm.OrigemIbge" @bind-Value:after="OnOrigemSelected"
+                           Label="Cidade de Origem"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           HelperText="Selecione a cidade (Domínio IBGE)"
+                           Adornment="Adornment.Start"
+                           AdornmentIcon="@Icons.Material.Filled.LocationOn">
+                    @foreach (var c in _cidadesIbge)
+                    {
+                        <MudSelectItem Value="@c.Ibge">@c.Descricao</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_vm.DestinoIbge" @bind-Value:after="OnDestinoSelected"
+                           Label="Cidade de Destino"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           HelperText="Selecione a cidade (Domínio IBGE)"
+                           Adornment="Adornment.Start"
+                           AdornmentIcon="@Icons.Material.Filled.Flag">
+                    @foreach (var c in _cidadesIbge)
+                    {
+                        <MudSelectItem Value="@c.Ibge">@c.Descricao</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            @if (!string.IsNullOrEmpty(_vm.OrigemDescricao) && !string.IsNullOrEmpty(_vm.DestinoDescricao))
+            {
+                <MudItem xs="12">
+                    <MudPaper Elevation="0" Class="pa-3"
+                              Style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:8px;">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@Icons.Material.Filled.Route" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2">
+                                <strong>@_vm.OrigemDescricao</strong>
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Class="mx-1" />
+                                <strong>@_vm.DestinoDescricao</strong>
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            }
+
+            @if (_erroFase2 is not null)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Error" Dense="true">@_erroFase2</MudAlert>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudStep>
+
+    @* ── FASE 3: Valores e Parcelas ── *@
+    <MudStep Title="Valores">
+        <MudGrid Spacing="3" Class="mt-2">
+
+            <MudItem xs="12" md="4">
+                <MudNumericField T="decimal" @bind-Value="_vm.ValorFrete" @bind-Value:after="RecalcularParcelas"
+                                 Label="Valor do Frete (R$)"
+                                 Variant="Variant.Outlined"
+                                 Format="N2" Culture="@_culturaBr"
+                                 Min="0m" HideSpinButtons="false"
+                                 Required="true"
+                                 HelperText="Valor bruto da operação" />
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudNumericField T="decimal" @bind-Value="_vm.ValorPedagio"
+                                 Label="Valor do Pedágio (R$)"
+                                 Variant="Variant.Outlined"
+                                 Format="N2" Culture="@_culturaBr"
+                                 Min="0m" HideSpinButtons="false"
+                                 HelperText="Pedágios da rota" />
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudNumericField T="decimal" @bind-Value="_vm.ValorImpostos"
+                                 Label="Impostos / INSS (R$)"
+                                 Variant="Variant.Outlined"
+                                 Format="N2" Culture="@_culturaBr"
+                                 Min="0m" HideSpinButtons="false"
+                                 HelperText="Retenções a deduzir" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Elevation="0" Class="pa-3"
+                          Style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:8px;">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.body2" Style="color:#6B7280;">
+                            Frete + Pedágio − Impostos
+                        </MudText>
+                        <MudText Typo="Typo.h6" Style="color:#AD1F0B; font-weight:700;">
+                            @_vm.ValorLiquido.ToString("C", _culturaBr)
+                        </MudText>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider Class="my-1" />
+                <MudText Typo="Typo.overline" Style="color:#6B7280; font-size:10px; letter-spacing:1px;">
+                    PAGAMENTO
+                </MudText>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_vm.MeioPagamento"
+                           Label="Meio de Pagamento"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           HelperText="@(_meiosFavorecido.Count == 0 ? "Favorecido sem meios cadastrados" : $"{_meiosFavorecido.Count} vinculado(s) ao favorecido")"
+                           Disabled="@(_meiosFavorecido.Count == 0)">
+                    @foreach (var mp in _meiosFavorecido)
+                    {
+                        <MudSelectItem Value="@mp.Identificador">@($"{mp.Tipo} — {mp.Descricao}")</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="3">
+                <MudNumericField T="int" @bind-Value="_vm.ParcelasQuantidade" @bind-Value:after="RecalcularParcelas"
+                                 Label="Qtd. Parcelas"
+                                 Variant="Variant.Outlined"
+                                 Min="1" Max="12"
+                                 Required="true" />
+            </MudItem>
+
+            <MudItem xs="12" md="3">
+                <MudDatePicker @bind-Date="_vm.DataVencimento" @bind-Date:after="RecalcularParcelas"
+                               Label="1º Vencimento"
+                               Variant="Variant.Outlined"
+                               DateFormat="dd/MM/yyyy"
+                               MinDate="DateTime.Today"
+                               Required="true" />
+            </MudItem>
+
+            @if (_vm.Parcelas.Count > 0)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.overline" Class="mb-2" Style="color:#6B7280; font-size:10px; letter-spacing:1px;">
+                        CRONOGRAMA DE PARCELAS
+                    </MudText>
+                    <MudTable Items="_vm.Parcelas" Dense="true" Hover="true" Elevation="0"
+                              Style="border:1px solid #E5E7EB; border-radius:8px;">
+                        <HeaderContent>
+                            <MudTh>#</MudTh>
+                            <MudTh>Vencimento</MudTh>
+                            <MudTh Style="text-align:right;">Valor</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.Numero</MudTd>
+                            <MudTd>@context.Vencimento.ToString("dd/MM/yyyy")</MudTd>
+                            <MudTd Style="text-align:right; font-weight:600;">@context.Valor.ToString("C", _culturaBr)</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudItem>
+            }
+
+            @if (_erroFase3 is not null)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Error" Dense="true">@_erroFase3</MudAlert>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudStep>
+
+    @* ── FASE 4: Revisão e Emissão ── *@
+    <MudStep Title="Revisão">
+        @if (_protocoloEmitido is null)
+        {
+            <MudGrid Spacing="3" Class="mt-2">
+
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.Info">
+                        Confira todos os dados antes de emitir. Após confirmar, o CIOT será gerado e sincronizado.
+                    </MudAlert>
+                </MudItem>
+
+                @* Card: Identificação *@
+                <MudItem xs="12" md="6">
+                    <MudPaper Elevation="0" Class="pa-4" Style="border:1px solid #E5E7EB; border-radius:10px; height:100%;">
+                        <MudText Typo="Typo.overline" Style="color:#9CA3AF; font-size:10px; letter-spacing:1px;">IDENTIFICAÇÃO</MudText>
+                        <MudDivider Class="my-2" />
+                        @ReviewRow("Contratante CNPJ", _vm.ContratanteCnpj)
+                        @ReviewRow("Favorecido",       _vm.FavorecidoNome)
+                        @ReviewRow("Documento",        _vm.FavorecidoDocumento, Mono: true)
+                        @ReviewRow("RNTRC",            _vm.FavorecidoRntrc, Mono: true)
+                    </MudPaper>
+                </MudItem>
+
+                @* Card: Logística *@
+                <MudItem xs="12" md="6">
+                    <MudPaper Elevation="0" Class="pa-4" Style="border:1px solid #E5E7EB; border-radius:10px; height:100%;">
+                        <MudText Typo="Typo.overline" Style="color:#9CA3AF; font-size:10px; letter-spacing:1px;">LOGÍSTICA E VEÍCULO</MudText>
+                        <MudDivider Class="my-2" />
+                        @ReviewRow("Veículo",   _tiposVeiculo.FirstOrDefault(v => v.Codigo == _vm.TipoVeiculo)?.Descricao)
+                        @ReviewRow("Placa",     _vm.VeiculoPlaca, Mono: true)
+                        @ReviewRow("Carga",     $"{_tiposCarga.FirstOrDefault(c => c.Codigo == _vm.TipoCarga)?.Descricao} ({_vm.UnidadeMedida})")
+                        @ReviewRow("Rota",      $"{_vm.OrigemDescricao} → {_vm.DestinoDescricao}")
+                    </MudPaper>
+                </MudItem>
+
+                @* Card: Valores *@
+                <MudItem xs="12" md="6">
+                    <MudPaper Elevation="0" Class="pa-4" Style="border:1px solid #E5E7EB; border-radius:10px; height:100%;">
+                        <MudText Typo="Typo.overline" Style="color:#9CA3AF; font-size:10px; letter-spacing:1px;">VALORES</MudText>
+                        <MudDivider Class="my-2" />
+                        @ReviewRow("Frete",     _vm.ValorFrete.ToString("C", _culturaBr))
+                        @ReviewRow("Pedágio",   _vm.ValorPedagio.ToString("C", _culturaBr))
+                        @ReviewRow("Impostos",  _vm.ValorImpostos.ToString("C", _culturaBr))
+                        <MudDivider Class="my-2" />
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.body2" Style="color:#374151; font-weight:600;">Valor Líquido</MudText>
+                            <MudText Typo="Typo.h6" Style="color:#AD1F0B; font-weight:700;">@_vm.ValorLiquido.ToString("C", _culturaBr)</MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+
+                @* Card: Pagamento + Parcelas *@
+                <MudItem xs="12" md="6">
+                    <MudPaper Elevation="0" Class="pa-4" Style="border:1px solid #E5E7EB; border-radius:10px; height:100%;">
+                        <MudText Typo="Typo.overline" Style="color:#9CA3AF; font-size:10px; letter-spacing:1px;">PAGAMENTO</MudText>
+                        <MudDivider Class="my-2" />
+                        @ReviewRow("Meio",      _meiosFavorecido.FirstOrDefault(m => m.Identificador == _vm.MeioPagamento)?.Descricao)
+                        @ReviewRow("Parcelas",  $"{_vm.ParcelasQuantidade}× a partir de {_vm.DataVencimento:dd/MM/yyyy}")
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.caption" Style="color:#6B7280;">@($"{_vm.Parcelas.Count} parcela(s) gerada(s)")</MudText>
+                    </MudPaper>
+                </MudItem>
+
+                @if (_erroFase4 is not null)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Error" Dense="false" Icon="@Icons.Material.Filled.Error">
+                            <strong>Falha ao emitir CIOT</strong>
+                            <div style="margin-top:4px;">@_erroFase4</div>
+                        </MudAlert>
+                    </MudItem>
+                }
+
+                <MudItem xs="12" Class="d-flex justify-end mt-2">
+                    <MudButton Color="Color.Primary"
+                               Variant="Variant.Filled"
+                               Size="Size.Large"
+                               StartIcon="@Icons.Material.Filled.CheckCircle"
+                               OnClick="ConfirmarEmissao"
+                               Disabled="_emitindo">
+                        Confirmar Emissão
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        }
+        else
+        {
+            @* Sucesso: protocolo emitido *@
+            <MudGrid Spacing="3" Class="mt-2">
+                <MudItem xs="12">
+                    <MudPaper Elevation="0" Class="pa-6"
+                              Style="background:linear-gradient(135deg,#D1FAE5 0%,#A7F3D0 100%); border:1px solid #10B981; border-radius:12px; text-align:center;">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Style="font-size:56px; color:#065F46;" />
+                        <MudText Typo="Typo.h5" Style="color:#065F46; font-weight:700; margin-top:8px;">
+                            Emissão Confirmada
+                        </MudText>
+                        <MudText Typo="Typo.body2" Style="color:#047857; margin-top:4px;">
+                            CIOT gerado com sucesso. Sincronização com base legada em andamento (background via Outbox).
+                        </MudText>
+
+                        <MudPaper Elevation="0" Class="pa-3 mt-4" Style="background:white; border-radius:8px; display:inline-block;">
+                            <MudText Typo="Typo.caption" Style="color:#6B7280;">PROTOCOLO</MudText>
+                            <MudText Typo="Typo.h6" Style="font-family:monospace; color:#111827;">@_protocoloEmitido</MudText>
+                        </MudPaper>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" Class="d-flex justify-center gap-2">
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Dashboard"
+                               Href="/ciot/dashboard">
+                        Ir para Dashboard
+                    </MudButton>
+                    <MudButton Color="Color.Primary"
+                               Variant="Variant.Filled"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="NovaEmissao">
+                        Nova Emissão
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        }
+    </MudStep>
+
+</MudStepper>
+
+<MudOverlay Visible="_emitindo" DarkBackground="true" ZIndex="9999">
+    <div style="text-align:center; color:white;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.h6" Class="mt-3" Style="color:white;">Processando emissão CIOT...</MudText>
+        <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.7);">Aguarde, isso pode levar alguns segundos.</MudText>
+    </div>
+</MudOverlay>
+
+@code {
+    private int _faseIndex;
+
+    private EmissaoViewModel _vm = new();
+    private string _documentoBusca = string.Empty;
+
+    private bool _buscando;
+    private bool _emitindo;
+    private string? _erroFase1;
+    private string? _erroFase2;
+    private string? _erroFase3;
+    private string? _erroFase4;
+    private string? _protocoloEmitido;
+    private FavorecidoDto? _favorecido;
+    private List<string> _fontesDados = [];
+    private bool _prioridadePamcard;
+
+    private CancellationTokenSource? _debounce;
+
+    // ── Fase 2: domínios via DomainService (cache T17) ──
+    private IReadOnlyList<DomainItem>     _tiposVeiculo      = [];
+    private IReadOnlyList<DomainItem>     _tiposCarga        = [];
+    private IReadOnlyList<CidadeIbgeItem> _cidadesIbge       = [];
+    private List<UnidadeMedidaItem>       _unidadesFiltradas = [];
+
+    // ── Fase 3: cultura BR para formatação + meios do favorecido ──
+    private static readonly System.Globalization.CultureInfo _culturaBr = new("pt-BR");
+    private IReadOnlyList<MeioPagamentoDto> _meiosFavorecido = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (State.EmissaoEmAndamento is not null)
+        {
+            _vm = State.EmissaoEmAndamento;
+            _documentoBusca = _vm.FavorecidoDocumento ?? string.Empty;
+            _faseIndex = State.FaseAtual > 0 ? State.FaseAtual - 1 : 0;
+        }
+        else
+        {
+            State.IniciarEmissao(_vm);
+        }
+
+        // Carrega domínios em paralelo (cached)
+        var veiculosTask = DomainService.GetTiposVeiculoAsync();
+        var cargasTask   = DomainService.GetTiposCargaAsync();
+        var cidadesTask  = DomainService.GetCidadesAsync();
+        await Task.WhenAll(veiculosTask, cargasTask, cidadesTask);
+        _tiposVeiculo = veiculosTask.Result;
+        _tiposCarga   = cargasTask.Result;
+        _cidadesIbge  = cidadesTask.Result;
+
+        await AtualizarUnidadesFiltradasAsync();
+
+        // Restaura meios do favorecido se já existia (sessão re-aberta)
+        if (_favorecido is not null) _meiosFavorecido = _favorecido.MeiosPagamento;
+    }
+
+    private async Task OnDocumentoChanged(string valor)
+    {
+        _documentoBusca = valor;
+        _erroFase1      = null;
+        _favorecido     = null;
+
+        var digits = new string(valor.Where(char.IsDigit).ToArray());
+
+        if (digits.Length < 11) return;
+
+        _debounce?.Cancel();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+        try   { await Task.Delay(500, token); }
+        catch (TaskCanceledException) { return; }
+
+        await BuscarFavorecido(digits);
+    }
+
+    private async Task BuscarFavorecido(string documento)
+    {
+        _buscando = true;
+        _fontesDados = [];
+        _prioridadePamcard = false;
+        StateHasChanged();
+
+        try
+        {
+            var docTipo  = documento.Length == 11 ? 1 : 2; // 1=CPF, 2=CNPJ
+
+            var ciotTask    = CiotClient.Favorecidos.FindAsync(new FindFavoredRequest
+            {
+                ContratanteCnpj     = _vm.ContratanteCnpj ?? string.Empty,
+                FavorecidoDocNumero = documento,
+                FavorecidoDocTipo   = docTipo,
+                ObterCartao         = true,
+                ObterConta          = true,
+            });
+            var pamcardTask = PamcardService.FindAsync(documento);
+
+            await Task.WhenAll(ciotTask, pamcardTask);
+
+            var ciotResult    = ciotTask.Result.IsSuccess ? ciotTask.Result.Value : null;
+            var pamcardResult = pamcardTask.Result;
+
+            if (ciotResult    is not null) _fontesDados.Add("CIOT");
+            if (pamcardResult is not null) _fontesDados.Add("Pamcard");
+
+            if (ciotResult is null && pamcardResult is null)
+            {
+                _erroFase1 = "Favorecido não encontrado em nenhuma base de dados.";
+                return;
+            }
+
+            _favorecido        = Merge(ciotResult, pamcardResult, documento);
+            _prioridadePamcard = pamcardResult is not null && ciotResult is not null;
+            _meiosFavorecido   = _favorecido.MeiosPagamento;
+
+            _vm.FavorecidoDocumento = documento;
+            _vm.FavorecidoNome      = _favorecido.Nome;
+            _vm.FavorecidoRntrc     = _favorecido.Rntrc;
+
+            // reset meio pagamento se já tinha selecionado e não está mais disponível
+            if (!string.IsNullOrEmpty(_vm.MeioPagamento) &&
+                !_meiosFavorecido.Any(m => m.Identificador == _vm.MeioPagamento))
+            {
+                _vm.MeioPagamento = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _erroFase1 = $"Erro ao buscar favorecido: {ex.Message}";
+        }
+        finally
+        {
+            _buscando = false;
+        }
+    }
+
+    private Task OnStepperPreview(StepperInteractionEventArgs args)
+    {
+        if (args.Action != StepAction.Activate) return Task.CompletedTask;
+
+        var saindoDe = _faseIndex;
+        var indoPara = args.StepIndex;
+
+        if (indoPara <= saindoDe) return Task.CompletedTask;
+
+        // ── Fase 1 → 2 ──
+        if (saindoDe == 0)
+        {
+            if (string.IsNullOrWhiteSpace(_vm.ContratanteCnpj))
+            {
+                Snackbar.Add("Informe o CNPJ do Contratante.", Severity.Warning);
+                args.Cancel = true;
+                return Task.CompletedTask;
+            }
+            if (_favorecido is null)
+            {
+                Snackbar.Add("Busque e selecione um Favorecido.", Severity.Warning);
+                args.Cancel = true;
+                return Task.CompletedTask;
+            }
+            if (!_favorecido.RntrcAtivo)
+            {
+                Snackbar.Add("RNTRC inativo — emissão não permitida.", Severity.Error);
+                args.Cancel = true;
+                return Task.CompletedTask;
+            }
+            State.AvancarFase();
+        }
+        // ── Fase 2 → 3 ──
+        else if (saindoDe == 1)
+        {
+            _erroFase2 = null;
+
+            if (string.IsNullOrWhiteSpace(_vm.TipoVeiculo))
+            { _erroFase2 = "Selecione o Tipo de Veículo."; args.Cancel = true; return Task.CompletedTask; }
+
+            var placaLimpa = (_vm.VeiculoPlaca ?? "").Replace("-", "");
+            if (placaLimpa.Length != 7 || !placaLimpa.All(char.IsLetterOrDigit))
+            { _erroFase2 = "Placa inválida — Mercosul exige 7 caracteres alfanuméricos."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (string.IsNullOrWhiteSpace(_vm.TipoCarga))
+            { _erroFase2 = "Selecione o Tipo de Carga."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (string.IsNullOrWhiteSpace(_vm.UnidadeMedida))
+            { _erroFase2 = "Selecione a Unidade de Medida."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (string.IsNullOrEmpty(_vm.OrigemIbge))
+            { _erroFase2 = "Selecione a cidade de Origem."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (string.IsNullOrEmpty(_vm.DestinoIbge))
+            { _erroFase2 = "Selecione a cidade de Destino."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (_vm.OrigemIbge == _vm.DestinoIbge)
+            { _erroFase2 = "Origem e Destino não podem ser a mesma cidade."; args.Cancel = true; return Task.CompletedTask; }
+
+            State.AvancarFase();
+        }
+        // ── Fase 3 → 4 ──
+        else if (saindoDe == 2)
+        {
+            _erroFase3 = null;
+
+            if (_vm.ValorFrete <= 0)
+            { _erroFase3 = "Valor do Frete deve ser maior que zero."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (_vm.ValorLiquido <= 0)
+            { _erroFase3 = "Valor líquido (Frete + Pedágio − Impostos) deve ser positivo."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (string.IsNullOrEmpty(_vm.MeioPagamento))
+            { _erroFase3 = "Selecione o Meio de Pagamento."; args.Cancel = true; return Task.CompletedTask; }
+
+            // valida que o meio de pagamento pertence ao favorecido (Fail-Fast da spec)
+            if (!_meiosFavorecido.Any(m => m.Identificador == _vm.MeioPagamento))
+            { _erroFase3 = "Meio de pagamento selecionado não está vinculado ao favorecido."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (_vm.DataVencimento is null || _vm.DataVencimento.Value.Date < DateTime.Today)
+            { _erroFase3 = "Data de vencimento deve ser hoje ou futura."; args.Cancel = true; return Task.CompletedTask; }
+
+            if (_vm.Parcelas.Count == 0)
+            { _erroFase3 = "Cronograma de parcelas inválido — revise os valores."; args.Cancel = true; return Task.CompletedTask; }
+
+            State.AvancarFase();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // ── Fase 2: handlers ──
+    private async Task OnTipoCargaChanged()
+    {
+        _vm.UnidadeMedida = null; // reset unidade ao trocar tipo de carga
+        await AtualizarUnidadesFiltradasAsync();
+    }
+
+    private void OnPlacaChanged()
+    {
+        if (string.IsNullOrEmpty(_vm.VeiculoPlaca)) return;
+        // uppercase + remove caracteres não-alfanuméricos (mantém hífen opcional)
+        var limpo = new string(_vm.VeiculoPlaca
+            .Where(c => char.IsLetterOrDigit(c) || c == '-')
+            .ToArray())
+            .ToUpperInvariant();
+        if (limpo != _vm.VeiculoPlaca) _vm.VeiculoPlaca = limpo;
+    }
+
+    private async Task AtualizarUnidadesFiltradasAsync()
+    {
+        if (string.IsNullOrEmpty(_vm.TipoCarga))
+        {
+            _unidadesFiltradas = [];
+            return;
+        }
+        var lista = await DomainService.GetUnidadesMedidaAsync(_vm.TipoCarga);
+        _unidadesFiltradas = lista.ToList();
+    }
+
+    private void OnOrigemSelected()
+    {
+        var c = _cidadesIbge.FirstOrDefault(x => x.Ibge == _vm.OrigemIbge);
+        _vm.OrigemDescricao = c?.Descricao;
+    }
+
+    private void OnDestinoSelected()
+    {
+        var c = _cidadesIbge.FirstOrDefault(x => x.Ibge == _vm.DestinoIbge);
+        _vm.DestinoDescricao = c?.Descricao;
+    }
+
+    // ── Fase 4: emissão ──
+    private async Task ConfirmarEmissao()
+    {
+        _emitindo  = true;
+        _erroFase4 = null;
+        StateHasChanged();
+
+        try
+        {
+            var docTipo = (_vm.FavorecidoDocumento?.Length ?? 0) == 11 ? 1 : 2;
+
+            var request = new InsertTripRequest
+            {
+                ContratanteCnpj = _vm.ContratanteCnpj ?? string.Empty,
+                Favorecidos =
+                [
+                    new FavorecidoItem
+                    {
+                        Tipo = docTipo,
+                        Nome = _vm.FavorecidoNome ?? string.Empty,
+                        Documentos =
+                        [
+                            new DocumentoFavorecidoItem
+                            {
+                                Tipo   = docTipo,
+                                Numero = _vm.FavorecidoDocumento ?? string.Empty,
+                            }
+                        ],
+                    }
+                ],
+                VeiculoPlaca     = _vm.VeiculoPlaca?.Replace("-", ""),
+                VeiculoCategoria = _vm.TipoVeiculo,
+                Origem  = int.TryParse(_vm.OrigemIbge,  out var orig) ? new CidadeLocalizacao { Ibge = orig } : null,
+                Destino = int.TryParse(_vm.DestinoIbge, out var dest) ? new CidadeLocalizacao { Ibge = dest } : null,
+                PedagioValor = _vm.ValorPedagio,
+                Parcelas = _vm.Parcelas.Select(p => new ParcelaItem
+                {
+                    Data  = DateOnly.FromDateTime(p.Vencimento),
+                    Valor = p.Valor,
+                }).ToList(),
+            };
+
+            var result = await CiotClient.Viagem.InsertTripAsync(request);
+
+            if (result.IsFailed)
+            {
+                _erroFase4 = string.Join("; ", result.Errors.Select(e => e.Message));
+                Snackbar.Add("Falha na emissão — verifique os detalhes.", Severity.Error);
+                return;
+            }
+
+            var ok = result.Value;
+            _protocoloEmitido = $"{ok.ViagemId}-{ok.ViagemDigito}";
+            _vm.CiotProtocolo = _protocoloEmitido;
+            _vm.CiotNumero    = ok.ViagemId;
+            Snackbar.Add("CIOT emitido com sucesso!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _erroFase4 = $"Erro inesperado: {ex.Message}";
+            Snackbar.Add("Erro inesperado na emissão.", Severity.Error);
+        }
+        finally
+        {
+            _emitindo = false;
+            StateHasChanged();
+        }
+    }
+
+    private void NovaEmissao()
+    {
+        State.Limpar();
+        _vm = new EmissaoViewModel();
+        _documentoBusca   = string.Empty;
+        _favorecido       = null;
+        _meiosFavorecido  = [];
+        _unidadesFiltradas= [];
+        _fontesDados      = [];
+        _protocoloEmitido = null;
+        _erroFase1 = _erroFase2 = _erroFase3 = _erroFase4 = null;
+        _faseIndex = 0;
+        State.IniciarEmissao(_vm);
+    }
+
+    // ── Fase 3: parcelas ──
+    private void RecalcularParcelas()
+    {
+        if (_vm.ParcelasQuantidade < 1) _vm.ParcelasQuantidade = 1;
+        if (_vm.ParcelasQuantidade > 12) _vm.ParcelasQuantidade = 12;
+
+        var liquido = _vm.ValorLiquido;
+        if (liquido <= 0 || _vm.DataVencimento is null)
+        {
+            _vm.Parcelas = [];
+            return;
+        }
+
+        var qtd       = _vm.ParcelasQuantidade;
+        var basePorPp = Math.Floor(liquido / qtd * 100m) / 100m; // 2 casas, trunca
+        var soma      = basePorPp * qtd;
+        var resto     = liquido - soma; // diferença vai na última parcela
+
+        var lista = new List<ParcelaViewModel>(qtd);
+        for (int i = 0; i < qtd; i++)
+        {
+            lista.Add(new ParcelaViewModel
+            {
+                Numero     = i + 1,
+                Valor      = i == qtd - 1 ? basePorPp + resto : basePorPp,
+                Vencimento = _vm.DataVencimento.Value.AddMonths(i),
+            });
+        }
+        _vm.Parcelas = lista;
+    }
+
+    private static FavorecidoDto Merge(FindFavoredResponse? ciot, FavorecidoDto? pamcard, string documento)
+    {
+        if (pamcard is not null)
+        {
+            return pamcard with
+            {
+                Nome          = Preferir(pamcard.Nome,          ciot?.Nome),
+                Rntrc         = Preferir(pamcard.Rntrc,         ciot?.RntrcCadastro),
+                RntrcSituacao = Preferir(pamcard.RntrcSituacao, ciot?.RntrcSituacao),
+                MeiosPagamento = pamcard.MeiosPagamento.Count > 0
+                    ? pamcard.MeiosPagamento
+                    : MapearMeiosCiot(ciot),
+            };
+        }
+
+        return new FavorecidoDto
+        {
+            Documento      = documento,
+            Nome           = ciot!.Nome,
+            Rntrc          = ciot.RntrcCadastro,
+            RntrcSituacao  = ciot.RntrcSituacao,
+            MeiosPagamento = MapearMeiosCiot(ciot),
+        };
+    }
+
+    private static string Preferir(string? primario, string? secundario) =>
+        !string.IsNullOrWhiteSpace(primario) ? primario : secundario ?? string.Empty;
+
+    private static IReadOnlyList<MeioPagamentoDto> MapearMeiosCiot(FindFavoredResponse? ciot)
+    {
+        if (ciot is null) return [];
+        var lista = new List<MeioPagamentoDto>();
+        foreach (var c in ciot.Cartoes)
+            lista.Add(new("Cartao", $"Cartão *{c.Numero[^4..]}", c.Numero));
+        foreach (var c in ciot.Contas)
+            lista.Add(new("Conta",  $"Banco {c.Banco} C/C {c.Numero}", c.Numero));
+        return lista;
+    }
+
+    private string GetRntrcBadgeStyle() =>
+        _favorecido?.RntrcAtivo == true
+            ? "background:#D1FAE5;color:#065F46;font-size:10px;height:18px;margin-left:6px;"
+            : "background:#FEE2E2;color:#991B1B;font-size:10px;height:18px;margin-left:6px;";
+
+    private static string FormatDocumento(string doc) =>
+        doc.Length == 11
+            ? $"{doc[..3]}.{doc[3..6]}.{doc[6..9]}-{doc[9..]}"
+            : $"{doc[..2]}.{doc[2..5]}.{doc[5..8]}/{doc[8..12]}-{doc[12..]}";
+}
+
+@* helper de linha de revisão *@
+@code {
+    private RenderFragment ReviewRow(string Label, string? Valor, bool Mono = false) => __builder =>
+    {
+        <div class="d-flex justify-space-between align-center" style="padding:3px 0;">
+            <span style="color:#6B7280; font-size:12px;">@Label</span>
+            <span style="@($"color:#111827; font-size:13px; font-weight:500; {(Mono ? "font-family:monospace;" : "")}")">
+                @(string.IsNullOrEmpty(Valor) ? "—" : Valor)
+            </span>
+        </div>
+    };
+}
