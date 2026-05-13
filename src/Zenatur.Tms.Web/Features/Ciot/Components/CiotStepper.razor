@@ -136,7 +136,7 @@
                             {
                                 <MudItem xs="12">
                                     <MudText Typo="Typo.caption" Style="color:#6B7280; margin-bottom:4px; display:block;">
-                                        Veículos vinculados ao motorista (Bridge) — primeiro pré-preenche Fase 2:
+                                        Veículos vinculados ao motorista (Bridge) — primeiro pré-preenche a placa na Fase 2:
                                     </MudText>
                                     <MudChipSet T="string">
                                         @foreach (var v in _veiculosBridge)
@@ -144,7 +144,7 @@
                                             <MudChip T="string" Size="Size.Small" Label="true"
                                                      Icon="@Icons.Material.Filled.LocalShipping"
                                                      Style="background:#EFF6FF; color:#1D4ED8; font-size:11px; font-family:monospace;">
-                                                @v.Placa.ToUpper() · @(v.Marca ?? "")@(string.IsNullOrEmpty(v.Modelo) ? "" : " " + v.Modelo)
+                                                @v.Placa.ToUpper() · @v.TipoVeiculo.Descricao @(string.IsNullOrEmpty(v.Modelo) ? "" : "· " + v.Modelo)
                                             </MudChip>
                                         }
                                     </MudChipSet>
@@ -637,11 +637,8 @@
                 ObterCartao         = true,
                 ObterConta          = true,
             });
-            // Bridge tem endpoint /motoristas (PF, 11 dígitos). PJ ainda não existe (spec §5.3).
-            // Para CNPJ pulamos Bridge — TMS usa apenas CIOT.
-            var bridgeTask = documento.Length == 11
-                ? Bridge.GetMotoristaAsync(documento)
-                : Task.FromResult(FluentResults.Result.Ok<MotoristaLegadoResponse?>(null));
+            // Bridge agora aceita CPF e CNPJ no mesmo endpoint /motoristas (digits only)
+            var bridgeTask = Bridge.GetMotoristaAsync(documento);
 
             await Task.WhenAll(ciotTask, bridgeTask);
 
@@ -670,13 +667,15 @@
             _vm.FavorecidoNome      = _favorecido.Nome;
             _vm.FavorecidoRntrc     = _favorecido.Rntrc;
 
-            // Pré-popula Fase 2 com primeiro veículo do Bridge (se houver)
+            // Pré-popula Fase 2 com primeiro veículo do Bridge (se houver).
+            // TipoVeiculo legado tem codificação própria (id+descrição) — NÃO pré-preenche
+            // o combo CIOT (CategoriaVeiculo SEFAZ); usuário escolhe manualmente.
+            // De-para legado→CIOT em TipoVeiculoLegadoMapper (futuro).
             _veiculosBridge = bridgeResult?.Veiculos ?? [];
             var v = _veiculosBridge.FirstOrDefault();
             if (v is not null && string.IsNullOrEmpty(_vm.VeiculoPlaca))
             {
                 _vm.VeiculoPlaca = v.Placa.Replace("-", "").ToUpperInvariant();
-                _vm.TipoVeiculo  = v.TipoVeiculo.ToString();
             }
 
             // reset meio pagamento se já tinha selecionado e não está mais disponível

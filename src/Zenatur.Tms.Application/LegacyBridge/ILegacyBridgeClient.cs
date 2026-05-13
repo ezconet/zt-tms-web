@@ -4,11 +4,11 @@ namespace Zenatur.Tms.Application.LegacyBridge;
 
 /// <summary>
 /// Cliente do Zenatur LegacyBridge — consulta dados cadastrais do SQL legado Zenatur.
-/// Fonte de verdade para dados cadastrais (nome, endereço, telefone, veículos do motorista).
+/// Endpoint /motoristas/{doc} aceita CPF e CNPJ (digits only).
 /// </summary>
 public interface ILegacyBridgeClient
 {
-    Task<Result<MotoristaLegadoResponse?>> GetMotoristaAsync(string cpf, CancellationToken ct = default);
+    Task<Result<MotoristaLegadoResponse?>> GetMotoristaAsync(string cpfOuCnpj, CancellationToken ct = default);
     Task<Result<VeiculoLegadoResponse?>>   GetVeiculoAsync(string placa, CancellationToken ct = default);
 }
 
@@ -34,19 +34,23 @@ public record EnderecoLegado(
 public record RntrcLegado(string Numero, bool? Ativo, DateOnly? Validade);
 
 /// <summary>
-/// Veículo vinculado ao motorista (vem inline na resposta /motoristas/{cpf}).
-/// Usado para pré-popular Fase 2 do Stepper.
+/// Veículo vinculado ao motorista (vem inline na resposta /motoristas/{doc}).
+/// `TipoVeiculo` usa codificação **legada Zenatur** — não bate com SEFAZ/CategoriaVeiculo CIOT.
+/// De-para legado→CIOT futuramente via `TipoVeiculoLegadoMapper`.
 /// </summary>
 public record VeiculoMotoristaItem(
-    string   Placa,
-    int      TipoVeiculo,
-    string?  Renavam,
-    int?     Ano,
-    string?  Marca,
-    string?  Modelo,
-    decimal? Tara,
-    decimal? CapacidadeKg,
-    string?  Rntrc);
+    string                Placa,
+    TipoVeiculoLegado     TipoVeiculo,
+    string?               Renavam,
+    int?                  AnoFabricacao,
+    int?                  AnoModelo,
+    string?               Marca,
+    string?               Modelo,
+    decimal?              Tara,
+    decimal?              CapacidadeKg,
+    string?               Rntrc);
+
+public record TipoVeiculoLegado(int Id, string Descricao);
 
 public record VeiculoLegadoResponse(
     string                Placa,
