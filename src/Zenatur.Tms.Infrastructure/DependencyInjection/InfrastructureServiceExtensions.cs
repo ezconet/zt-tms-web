@@ -29,11 +29,16 @@ public static class InfrastructureServiceExtensions
 
         services.AddScoped<ITokenValidator,           TokenValidator>();
         services.AddScoped<IUserService,              TmsUserService>();
-        services.AddScoped<IPamcardFavorecidoService,  MockPamcardFavorecidoService>();
-        services.AddSingleton<ICiotClient,             MockCiotClient>();
-        services.AddSingleton<IFavorecidoManagementService, InMemoryFavorecidoManagementService>();
-        services.AddSingleton<IFinanceiroService,           InMemoryFinanceiroService>();
-        services.AddSingleton<IDomainService,               DomainCacheService>();
+
+        // ─── Implementações HTTP reais (A8-A11) ───
+        // CIOT API via HttpClient tipado + Polly + X-Api-Key. SDK fica de lado por enquanto.
+        services.AddScoped<ICiotClient,             HttpCiotClient>();
+        services.AddScoped<IFavorecidoManagementService, CiotApiFavorecidoService>();
+        services.AddScoped<IFinanceiroService,      CiotApiFinanceiroService>();
+        services.AddScoped<IDomainService,          CiotApiDomainService>();
+
+        // IPamcardFavorecidoService mantido por enquanto (cleanup A13 — remove quando Bridge entrar)
+        services.AddScoped<IPamcardFavorecidoService, MockPamcardFavorecidoService>();
 
         services.AddDbContext<TmsDbContext>(options =>
             options.UseSqlServer(config.GetConnectionString("TmsDb")));
