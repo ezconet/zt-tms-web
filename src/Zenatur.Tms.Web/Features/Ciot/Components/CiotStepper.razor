@@ -11,6 +11,7 @@
 @inject IDomainService DomainService
 @inject CiotStateContainer State
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject IWebHostEnvironment Env
 
 <MudStepper @bind-ActiveIndex="_faseIndex"
@@ -183,6 +184,21 @@
                         <MudSelectItem Value="@v.Codigo">@v.Descricao</MudSelectItem>
                     }
                 </MudSelect>
+                @if (_tipoVeiculoBridgeSugestao is not null)
+                {
+                    <MudPaper Elevation="0" Class="pa-2 mt-1"
+                              Style="background:#FEF3C7; border:1px solid #FCD34D; border-radius:6px;">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Style="color:#92400E; font-size:16px;" />
+                            <MudText Typo="Typo.caption" Style="color:#92400E;">
+                                <strong>Bridge sugere:</strong>
+                                @_tipoVeiculoBridgeSugestao.Descricao
+                                <span style="opacity:0.7;">(id legado @_tipoVeiculoBridgeSugestao.Id)</span>
+                                — escolha o equivalente SEFAZ acima
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                }
             </MudItem>
 
             <MudItem xs="12" md="6">
@@ -565,6 +581,7 @@
     private IReadOnlyList<CidadeIbgeItem> _cidadesIbge       = [];
     private List<UnidadeMedidaItem>       _unidadesFiltradas = [];
     private IReadOnlyList<VeiculoMotoristaItem> _veiculosBridge = [];
+    private TipoVeiculoLegado? _tipoVeiculoBridgeSugestao;
 
     // ── Fase 3: cultura BR para formatação + meios do favorecido ──
     private static readonly System.Globalization.CultureInfo _culturaBr = new("pt-BR");
@@ -654,13 +671,42 @@
                 return;
             }
 
-            _favorecido = FavorecidoMerger.Merge(ciotResult, bridgeResult, documento);
-            if (_favorecido is null)
+            var novoFavorecido = FavorecidoMerger.Merge(ciotResult, bridgeResult, documento);
+            if (novoFavorecido is null)
             {
                 _erroFase1 = "Favorecido não encontrado.";
                 return;
             }
-            _prioridadeBridge = bridgeResult is not null;
+
+            // M1: troca de favorecido com dados preenchidos → confirma limpeza
+            var trocouFavorecido =
+                _favorecido is not null &&
+                _favorecido.Documento != novoFavorecido.Documento;
+
+            if (trocouFavorecido && PossuiDadosFasesPosteriores())
+            {
+                var confirma = await DialogService.ShowMessageBoxAsync(
+                    title:      "Trocar favorecido?",
+                    message:    $"Você trocou o favorecido de {_favorecido!.Nome} para {novoFavorecido.Nome}. " +
+                                "Dados das próximas fases (veículo, valores, parcelas) serão limpos para refletir o novo favorecido. Continuar?",
+                    yesText:    "Limpar e trocar",
+                    noText:     null,
+                    cancelText: "Manter anterior",
+                    options:    null);
+
+                if (confirma != true)
+                {
+                    // Reverte: restaura documento anterior na busca, abandona o novo
+                    _documentoBusca = _favorecido!.Documento;
+                    Snackbar.Add("Troca cancelada. Favorecido anterior mantido.", Severity.Info);
+                    return;
+                }
+
+                LimparDadosFasesPosteriores();
+            }
+
+            _favorecido        = novoFavorecido;
+            _prioridadeBridge  = bridgeResult is not null;
             _meiosFavorecido   = _favorecido.MeiosPagamento;
 
             _vm.FavorecidoDocumento = documento;
@@ -672,6 +718,7 @@
             // o combo CIOT (CategoriaVeiculo SEFAZ); usuário escolhe manualmente.
             // De-para legado→CIOT em TipoVeiculoLegadoMapper (futuro).
             _veiculosBridge = bridgeResult?.Veiculos ?? [];
+            _tipoVeiculoBridgeSugestao = _veiculosBridge.FirstOrDefault()?.TipoVeiculo;
             var v = _veiculosBridge.FirstOrDefault();
             if (v is not null && string.IsNullOrEmpty(_vm.VeiculoPlaca))
             {
@@ -936,6 +983,42 @@
         doc.Length == 11
             ? $"{doc[..3]}.{doc[3..6]}.{doc[6..9]}-{doc[9..]}"
             : $"{doc[..2]}.{doc[2..5]}.{doc[5..8]}/{doc[8..12]}-{doc[12..]}";
+
+    // M1: detecção e limpeza de dados ao trocar favorecido
+    private bool PossuiDadosFasesPosteriores() =>
+        !string.IsNullOrEmpty(_vm.VeiculoPlaca) ||
+        !string.IsNullOrEmpty(_vm.TipoVeiculo)  ||
+        !string.IsNullOrEmpty(_vm.TipoCarga)    ||
+        !string.IsNullOrEmpty(_vm.OrigemIbge)   ||
+        !string.IsNullOrEmpty(_vm.DestinoIbge)  ||
+        _vm.ValorFrete    > 0 ||
+        _vm.ValorPedagio  > 0 ||
+        _vm.ValorImpostos > 0 ||
+        !string.IsNullOrEmpty(_vm.MeioPagamento);
+
+    private void LimparDadosFasesPosteriores()
+    {
+        // mantém Contratante (Fase 1 conserva) e favorecido será atualizado depois
+        _vm.TipoVeiculo      = null;
+        _vm.VeiculoPlaca     = null;
+        _vm.TipoCarga        = null;
+        _vm.UnidadeMedida    = null;
+        _vm.OrigemIbge       = null;
+        _vm.OrigemDescricao  = null;
+        _vm.DestinoIbge      = null;
+        _vm.DestinoDescricao = null;
+        _vm.ValorFrete       = 0;
+        _vm.ValorPedagio     = 0;
+        _vm.ValorImpostos    = 0;
+        _vm.DataVencimento   = null;
+        _vm.ParcelasQuantidade = 1;
+        _vm.MeioPagamento    = null;
+        _vm.Parcelas         = [];
+        _meiosFavorecido     = [];
+        _veiculosBridge      = [];
+        _tipoVeiculoBridgeSugestao = null;
+        _faseIndex           = 0; // volta visualmente para Fase 1
+    }
 }
 
 @* helper de linha de revisão *@
