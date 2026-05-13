@@ -612,7 +612,12 @@
                 return;
             }
 
-            _favorecido        = Merge(ciotResult, pamcardResult, documento);
+            _favorecido        = FavorecidoMerger.Merge(ciotResult, pamcardResult, documento);
+            if (_favorecido is null)
+            {
+                _erroFase1 = "Favorecido não encontrado em nenhuma base de dados.";
+                return;
+            }
             _prioridadePamcard = pamcardResult is not null && ciotResult is not null;
             _meiosFavorecido   = _favorecido.MeiosPagamento;
 
@@ -856,71 +861,12 @@
     // ── Fase 3: parcelas ──
     private void RecalcularParcelas()
     {
-        if (_vm.ParcelasQuantidade < 1) _vm.ParcelasQuantidade = 1;
+        if (_vm.ParcelasQuantidade < 1)  _vm.ParcelasQuantidade = 1;
         if (_vm.ParcelasQuantidade > 12) _vm.ParcelasQuantidade = 12;
 
-        var liquido = _vm.ValorLiquido;
-        if (liquido <= 0 || _vm.DataVencimento is null)
-        {
-            _vm.Parcelas = [];
-            return;
-        }
-
-        var qtd       = _vm.ParcelasQuantidade;
-        var basePorPp = Math.Floor(liquido / qtd * 100m) / 100m; // 2 casas, trunca
-        var soma      = basePorPp * qtd;
-        var resto     = liquido - soma; // diferença vai na última parcela
-
-        var lista = new List<ParcelaViewModel>(qtd);
-        for (int i = 0; i < qtd; i++)
-        {
-            lista.Add(new ParcelaViewModel
-            {
-                Numero     = i + 1,
-                Valor      = i == qtd - 1 ? basePorPp + resto : basePorPp,
-                Vencimento = _vm.DataVencimento.Value.AddMonths(i),
-            });
-        }
-        _vm.Parcelas = lista;
-    }
-
-    private static FavorecidoDto Merge(FindFavoredResponse? ciot, FavorecidoDto? pamcard, string documento)
-    {
-        if (pamcard is not null)
-        {
-            return pamcard with
-            {
-                Nome          = Preferir(pamcard.Nome,          ciot?.Nome),
-                Rntrc         = Preferir(pamcard.Rntrc,         ciot?.RntrcCadastro),
-                RntrcSituacao = Preferir(pamcard.RntrcSituacao, ciot?.RntrcSituacao),
-                MeiosPagamento = pamcard.MeiosPagamento.Count > 0
-                    ? pamcard.MeiosPagamento
-                    : MapearMeiosCiot(ciot),
-            };
-        }
-
-        return new FavorecidoDto
-        {
-            Documento      = documento,
-            Nome           = ciot!.Nome,
-            Rntrc          = ciot.RntrcCadastro,
-            RntrcSituacao  = ciot.RntrcSituacao,
-            MeiosPagamento = MapearMeiosCiot(ciot),
-        };
-    }
-
-    private static string Preferir(string? primario, string? secundario) =>
-        !string.IsNullOrWhiteSpace(primario) ? primario : secundario ?? string.Empty;
-
-    private static IReadOnlyList<MeioPagamentoDto> MapearMeiosCiot(FindFavoredResponse? ciot)
-    {
-        if (ciot is null) return [];
-        var lista = new List<MeioPagamentoDto>();
-        foreach (var c in ciot.Cartoes)
-            lista.Add(new("Cartao", $"Cartão *{c.Numero[^4..]}", c.Numero));
-        foreach (var c in ciot.Contas)
-            lista.Add(new("Conta",  $"Banco {c.Banco} C/C {c.Numero}", c.Numero));
-        return lista;
+        _vm.Parcelas = _vm.DataVencimento is null
+            ? []
+            : ParcelaCalculator.Calcular(_vm.ValorLiquido, _vm.ParcelasQuantidade, _vm.DataVencimento.Value);
     }
 
     private string GetRntrcBadgeStyle() =>
