@@ -598,9 +598,8 @@
                 ObterCartao         = true,
                 ObterConta          = true,
             });
-            var bridgeTask = documento.Length == 11
-                ? Bridge.GetMotoristaAsync(documento)
-                : Task.FromResult(FluentResults.Result.Ok<MotoristaLegadoResponse?>(null)); // Bridge só tem motorista (CPF) por enquanto
+            // Bridge aceita CPF ou CNPJ via mesmo endpoint /motoristas (digits only)
+            var bridgeTask = Bridge.GetMotoristaAsync(documento);
 
             await Task.WhenAll(ciotTask, bridgeTask);
 
