@@ -160,6 +160,8 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter] public FavorecidoListItem? Original { get; set; }
+    [Parameter] public string? DocumentoPreenchido { get; set; }
+    [Parameter] public int?    DocumentoTipoPreenchido { get; set; }
 
     private bool IsEdicao => Original is not null;
 
@@ -177,7 +179,13 @@
         }
         else
         {
-            _form = new FavorecidoListItem { DocumentoTipo = 1, RntrcSituacao = "Ativo" };
+            _form = new FavorecidoListItem
+            {
+                DocumentoTipo = DocumentoTipoPreenchido ?? 1,
+                RntrcSituacao = "Ativo",
+                Documento     = DocumentoPreenchido ?? string.Empty,
+            };
+            _documento = DocumentoPreenchido ?? string.Empty;
         }
     }
 

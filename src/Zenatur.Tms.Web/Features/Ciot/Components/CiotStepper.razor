@@ -52,7 +52,7 @@
             {
                 <MudItem xs="12">
                     <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-1" />
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">Buscando em CIOT API + LegacyBridge...</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Buscando favorecido...</MudText>
                 </MudItem>
             }
 
@@ -64,6 +64,16 @@
                         <div style="margin-top:4px; font-size:12px;">
                             Corrija o documento ou tente outro favorecido. Avançar está bloqueado.
                         </div>
+                        @if (_favorecido is null && _documentoBusca.Where(char.IsDigit).Count() is 11 or 14)
+                        {
+                            <div style="margin-top:8px;">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.PersonAdd"
+                                           OnClick="AbrirCadastroFavorecido">
+                                    Cadastrar Novo Favorecido
+                                </MudButton>
+                            </div>
+                        }
                     </MudAlert>
                 </MudItem>
             }
@@ -102,10 +112,10 @@
                             {
                                 <MudItem xs="12">
                                     <MudText Typo="Typo.caption" Style="color:#6B7280; margin-bottom:4px; display:block;">
-                                        Meios de Pagamento Disponíveis
+                                        Meios de Pagamento Disponíveis (@meios.Count)
                                     </MudText>
                                     <MudChipSet T="string">
-                                        @foreach (var mp in meios)
+                                        @foreach (var mp in (_expandirMeios ? meios : meios.Take(6)))
                                         {
                                             <MudChip T="string" Size="Size.Small" Label="true"
                                                      Icon="@(mp.Tipo == "Cartao" ? Icons.Material.Filled.CreditCard : Icons.Material.Filled.AccountBalance)"
@@ -114,6 +124,15 @@
                                             </MudChip>
                                         }
                                     </MudChipSet>
+                                    @if (meios.Count > 6)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                                   StartIcon="@(_expandirMeios ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                                   OnClick="@(() => _expandirMeios = !_expandirMeios)"
+                                                   Style="text-transform:none; font-size:12px;">
+                                            @(_expandirMeios ? "Recolher" : $"Ver mais {meios.Count - 6}")
+                                        </MudButton>
+                                    }
                                 </MudItem>
                             }
 
@@ -157,8 +176,7 @@
                             {
                                 <MudItem xs="12">
                                     <MudText Typo="Typo.caption" Style="color:#9CA3AF;">
-                                        Dados de: @string.Join(" + ", _fontesDados)
-                                        @if (_prioridadeBridge){ <text> · LegacyBridge como fonte cadastral</text> }
+                                        Dados obtidos com sucesso.
                                     </MudText>
                                 </MudItem>
                             }
@@ -360,18 +378,10 @@
                                  Variant="Variant.Outlined"
                                  Format="N2" Culture="@_culturaBr"
                                  Min="0m" HideSpinButtons="false"
+                                 Immediate="true"
                                  Required="true"
                                  HelperText="@(_vm.FreteMinimoAntt is decimal fm ? $"ANTT mínimo: {fm.ToString("C", _culturaBr)}" : "Valor bruto da operação")" />
             </MudItem>
-
-            @if (_vm.FreteMinimoAntt is decimal min2 && _vm.ValorFrete > 0 && _vm.ValorFrete < min2)
-            {
-                <MudItem xs="12">
-                    <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Filled.Warning">
-                        Valor de frete (@_vm.ValorFrete.ToString("C", _culturaBr)) abaixo do mínimo ANTT (@min2.ToString("C", _culturaBr)).
-                    </MudAlert>
-                </MudItem>
-            }
 
             <MudItem xs="12" md="4">
                 <MudNumericField T="decimal" @bind-Value="_vm.ValorPedagio"
@@ -391,6 +401,15 @@
                                  HelperText="Retenções a deduzir" />
             </MudItem>
 
+            @if (_vm.FreteMinimoAntt is decimal min2 && _vm.ValorFrete > 0 && _vm.ValorFrete < min2)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Filled.Warning">
+                        Valor de frete (@_vm.ValorFrete.ToString("C", _culturaBr)) abaixo do mínimo ANTT (@min2.ToString("C", _culturaBr)).
+                    </MudAlert>
+                </MudItem>
+            }
+
             <MudItem xs="12">
                 <MudPaper Elevation="0" Class="pa-3"
                           Style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:8px;">
@@ -404,6 +423,57 @@
                     </MudStack>
                 </MudPaper>
             </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider Class="my-1" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudText Typo="Typo.overline" Style="color:#6B7280; font-size:10px; letter-spacing:1px;">
+                        DOCUMENTOS DA VIAGEM
+                    </MudText>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="AdicionarDocumentoViagem">
+                        Adicionar Documento
+                    </MudButton>
+                </MudStack>
+            </MudItem>
+
+            @for (int i = 0; i < _vm.DocumentosViagem.Count; i++)
+            {
+                var idx = i;
+                var doc = _vm.DocumentosViagem[idx];
+                <MudItem xs="12" md="5">
+                    <MudSelect T="int" @bind-Value="doc.Tipo"
+                               Label="Tipo" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="1">Manifesto</MudSelectItem>
+                        <MudSelectItem Value="2">Romaneio</MudSelectItem>
+                        <MudSelectItem Value="3">Plano de Viagem</MudSelectItem>
+                        <MudSelectItem Value="5">Conhecimento (CT-e)</MudSelectItem>
+                        <MudSelectItem Value="6">Nota Fiscal (NF-e)</MudSelectItem>
+                        <MudSelectItem Value="7">Documento do Cliente</MudSelectItem>
+                        <MudSelectItem Value="8">Pedido</MudSelectItem>
+                        <MudSelectItem Value="11">Ordem de Coleta</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="10" md="6">
+                    <MudTextField @bind-Value="doc.Numero"
+                                  Label="Número" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Required="true" />
+                </MudItem>
+                <MudItem xs="2" md="1" Class="d-flex align-center">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error" Size="Size.Small"
+                                   OnClick="@(() => _vm.DocumentosViagem.RemoveAt(idx))" />
+                </MudItem>
+            }
+            @if (_vm.DocumentosViagem.Count == 0)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        Adicione ao menos 1 documento (NF-e, CT-e, manifesto, etc) antes da emissão.
+                    </MudAlert>
+                </MudItem>
+            }
 
             <MudItem xs="12">
                 <MudDivider Class="my-1" />
@@ -601,6 +671,13 @@
 
 </MudStepper>
 
+<MudOverlay Visible="_calculandoRota" DarkBackground="true" ZIndex="9999">
+    <MudStack AlignItems="AlignItems.Center" Spacing="3">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.h6" Style="color:white;">Calculando rota e frete mínimo na Pamcard...</MudText>
+    </MudStack>
+</MudOverlay>
+
 <MudOverlay Visible="_emitindo" DarkBackground="true" ZIndex="9999">
     <div style="text-align:center; color:white;">
         <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
@@ -616,6 +693,8 @@
     private string _documentoBusca = string.Empty;
 
     private bool _buscando;
+    private bool _calculandoRota;
+    private bool _expandirMeios;
     private bool _emitindo;
     private string? _erroFase1;
     private string? _erroFase2;
@@ -696,6 +775,12 @@
 
         // Restaura meios do favorecido se já existia (sessão re-aberta)
         if (_favorecido is not null) _meiosFavorecido = _favorecido.MeiosPagamento;
+
+        // F5/reentry: state container guardou doc do favorecido mas _favorecido (card UI) é volátil → re-busca
+        if (_favorecido is null && !string.IsNullOrEmpty(_vm.FavorecidoDocumento))
+        {
+            await BuscarFavorecido(_vm.FavorecidoDocumento);
+        }
     }
 
     private async Task OnDocumentoChanged(string valor)
@@ -751,7 +836,7 @@
 
             if (ciotResult is null && bridgeResult is null)
             {
-                _erroFase1 = "Favorecido não encontrado em nenhuma das fontes (CIOT + LegacyBridge).";
+                _erroFase1 = "Favorecido não encontrado. Verifique o documento ou cadastre o favorecido antes de emitir.";
                 return;
             }
 
@@ -920,10 +1005,36 @@
             if (_vm.Parcelas.Count == 0)
             { _erroFase3 = "Cronograma de parcelas inválido — revise os valores."; args.Cancel = true; return; }
 
+            if (_vm.DocumentosViagem.Count == 0 || _vm.DocumentosViagem.Any(d => string.IsNullOrWhiteSpace(d.Numero)))
+            { _erroFase3 = "Adicione ao menos 1 documento de viagem com número válido."; args.Cancel = true; return; }
+
             State.AvancarFase();
         }
 
         return;
+    }
+
+    private void AdicionarDocumentoViagem()
+    {
+        _vm.DocumentosViagem.Add(new DocumentoViagemViewModel { Tipo = 6 });
+    }
+
+    private async Task AbrirCadastroFavorecido()
+    {
+        var docDigits = new string(_documentoBusca.Where(char.IsDigit).ToArray());
+        var parameters = new DialogParameters
+        {
+            ["DocumentoPreenchido"]      = docDigits,
+            ["DocumentoTipoPreenchido"]  = docDigits.Length == 11 ? 1 : 2,
+        };
+        var dialog = await DialogService.ShowAsync<FavorecidoForm>("Novo Favorecido", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false } && !string.IsNullOrEmpty(docDigits))
+        {
+            _erroFase1 = null;
+            await BuscarFavorecido(docDigits);
+        }
     }
 
     // ── Fase 2 → 3: Roteirização + Frete Mínimo ANTT ──
@@ -935,6 +1046,8 @@
             !int.TryParse(_vm.OrigemIbge,  out var ibgeOrig) ||
             !int.TryParse(_vm.DestinoIbge, out var ibgeDest)) return;
 
+        _calculandoRota = true;
+        StateHasChanged();
         try
         {
             var routerTask = CiotClient.Roteirizacao.RouterAsync(new RouterRequest
@@ -952,16 +1065,22 @@
             });
 
             var router = await routerTask;
-            decimal km;
-            if (router.IsSuccess && router.Value.Km > 0)
+            if (router.IsFailed)
             {
-                km = router.Value.Km;
-                _vm.DistanciaKm  = km;
-                _vm.ValorPedagio = router.Value.PedagioValor;
+                var motivo = string.Join("; ", router.Errors.Select(e => e.Message));
+                Snackbar.Add($"Falha rota Pamcard: {motivo}", Severity.Warning);
+                return;
             }
-            else
+
+            var km = router.Value.Km;
+            _vm.DistanciaKm  = km;
+            _vm.ValorPedagio = router.Value.PedagioValor;
+
+            if (km <= 0)
             {
-                Snackbar.Add("Falha ao calcular rota Pamcard.", Severity.Warning);
+                // Mesma cidade (intra-municipal): Pamcard retorna km=0, ANTT não cobre frete mínimo
+                _vm.FreteMinimoAntt = null;
+                Snackbar.Add("Origem e destino na mesma cidade — sem distância para frete mínimo ANTT.", Severity.Info);
                 return;
             }
 
@@ -970,6 +1089,11 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Erro na roteirização: {ex.Message}", Severity.Warning);
+        }
+        finally
+        {
+            _calculandoRota = false;
+            StateHasChanged();
         }
     }
 
@@ -997,7 +1121,10 @@
         }
         else
         {
-            Snackbar.Add("Falha ao obter frete mínimo ANTT.", Severity.Warning);
+            var motivo = fm.IsFailed
+                ? string.Join("; ", fm.Errors.Select(e => e.Message))
+                : "Valor zero retornado";
+            Snackbar.Add($"Falha frete mínimo ANTT: {motivo}", Severity.Warning);
         }
     }
 
@@ -1038,16 +1165,26 @@
     private CidadeIbgeItem? _origemSelecionada;
     private CidadeIbgeItem? _destinoSelecionada;
 
+    private static string RemoverAcentos(string s)
+    {
+        var norm = s.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(norm.Length);
+        foreach (var ch in norm)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(ch);
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
+    }
+
     private Task<IEnumerable<CidadeIbgeItem>> BuscarCidades(string? termo, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(termo))
             return Task.FromResult(Enumerable.Empty<CidadeIbgeItem>());
 
-        var t = termo.Trim();
+        var t = RemoverAcentos(termo.Trim()).ToLowerInvariant();
         var filtro = _cidadesIbge
             .Where(c =>
-                c.Cidade.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                c.Uf.Equals(t, StringComparison.OrdinalIgnoreCase))
+                RemoverAcentos(c.Cidade).Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                c.Uf.Equals(termo.Trim(), StringComparison.OrdinalIgnoreCase))
             .Take(50);
 
         return Task.FromResult(filtro);
@@ -1095,6 +1232,8 @@
                                 Numero = _vm.FavorecidoDocumento ?? string.Empty,
                             }
                         ],
+                        TelefoneDdd    = _favorecido?.TelefoneDdd    ?? "11",
+                        TelefoneNumero = _favorecido?.TelefoneNumero ?? "999999999",
                     }
                 ],
                 VeiculoPlaca     = _vm.VeiculoPlaca?.Replace("-", ""),
@@ -1102,6 +1241,11 @@
                 Origem  = int.TryParse(_vm.OrigemIbge,  out var orig) ? new CidadeLocalizacao { Ibge = orig } : null,
                 Destino = int.TryParse(_vm.DestinoIbge, out var dest) ? new CidadeLocalizacao { Ibge = dest } : null,
                 PedagioValor = _vm.ValorPedagio,
+                Documentos = _vm.DocumentosViagem.Select(d => new DocumentoViagemItem
+                {
+                    Tipo   = d.Tipo,
+                    Numero = d.Numero,
+                }).ToList(),
                 Parcelas = _vm.Parcelas.Select(p => new ParcelaItem
                 {
                     Data  = DateOnly.FromDateTime(p.Vencimento),

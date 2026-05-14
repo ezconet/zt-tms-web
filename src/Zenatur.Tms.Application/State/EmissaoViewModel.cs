@@ -33,6 +33,9 @@ public class EmissaoViewModel
     public string   ContratacaoTipo   { get; set; } = "1"; // 1=Carga Lotação, 2=Veículo Automotor
     public bool     AltoDesempenho    { get; set; }
 
+    // Documentos da viagem (mínimo 1 obrigatório no Pamcard)
+    public List<DocumentoViagemViewModel> DocumentosViagem { get; set; } = [];
+
     public decimal ValorLiquido => ValorFrete + ValorPedagio - ValorImpostos;
 
     // Resultado (pós-emissão)
@@ -45,4 +48,10 @@ public class ParcelaViewModel
     public int       Numero      { get; set; }
     public decimal   Valor       { get; set; }
     public DateTime  Vencimento  { get; set; }
+}
+
+public class DocumentoViagemViewModel
+{
+    public int     Tipo   { get; set; } = 6; // default NOTA FISCAL
+    public string  Numero { get; set; } = string.Empty;
 }

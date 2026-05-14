@@ -32,14 +32,31 @@ public static class FavorecidoMerger
         // Meios pagamento: CIOT é fonte de verdade (Bridge legado não tem essa info)
         var meios = MapearMeiosCiot(ciot);
 
+        var (ddd, numero) = ParseTelefone(bridge?.Telefone);
+
         return new FavorecidoDto
         {
             Documento      = documento,
             Nome           = nome,
             Rntrc          = rntrc,
             RntrcSituacao  = rntrcSituacao,
+            TelefoneDdd    = ddd,
+            TelefoneNumero = numero,
             MeiosPagamento = meios,
         };
+    }
+
+    /// <summary>
+    /// Aceita "(11) 98765-4321", "11987654321", "1198765-4321", "(31) 4002-8922" etc.
+    /// Retorna (ddd, numero) com apenas dígitos. Bridge é única fonte hoje.
+    /// </summary>
+    private static (string? Ddd, string? Numero) ParseTelefone(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return (null, null);
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+        if (digits.Length < 10) return (null, null);
+        if (digits.Length > 11) digits = digits[^11..]; // descarta prefixo país se vier
+        return (digits[..2], digits[2..]);
     }
 
     private static string Preferir(string? primario, string? secundario) =>

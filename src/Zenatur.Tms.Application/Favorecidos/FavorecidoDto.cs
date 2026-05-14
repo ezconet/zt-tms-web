@@ -6,6 +6,8 @@ public record FavorecidoDto
     public string Nome          { get; init; } = string.Empty;
     public string Rntrc         { get; init; } = string.Empty;
     public string RntrcSituacao { get; init; } = string.Empty;
+    public string? TelefoneDdd    { get; init; }
+    public string? TelefoneNumero { get; init; }
 
     public bool RntrcAtivo =>
         RntrcSituacao.Equals("Ativo", StringComparison.OrdinalIgnoreCase) ||
