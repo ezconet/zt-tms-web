@@ -27,6 +27,12 @@ public class EmissaoViewModel
     public string? MeioPagamento      { get; set; }
     public List<ParcelaViewModel> Parcelas { get; set; } = [];
 
+    // Roteirização + Frete Mínimo ANTT (calculados na transição Fase 2→3)
+    public decimal? DistanciaKm       { get; set; }
+    public decimal? FreteMinimoAntt   { get; set; }
+    public string   ContratacaoTipo   { get; set; } = "1"; // 1=Carga Lotação, 2=Veículo Automotor
+    public bool     AltoDesempenho    { get; set; }
+
     public decimal ValorLiquido => ValorFrete + ValorPedagio - ValorImpostos;
 
     // Resultado (pós-emissão)

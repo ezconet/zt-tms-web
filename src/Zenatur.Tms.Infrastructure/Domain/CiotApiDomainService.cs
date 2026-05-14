@@ -41,8 +41,9 @@ internal sealed class CiotApiDomainService : IDomainService
 
     public Task<IReadOnlyList<CidadeIbgeItem>> GetCidadesAsync(CancellationToken ct = default)
     {
-        // CidadesIbge ainda em tabela separada (não está em PamcardDominio). Fallback estático.
-        return Task.FromResult<IReadOnlyList<CidadeIbgeItem>>(CidadesFallback.Lista);
+        // Lista completa IBGE (~5571 municípios) carregada do JSON empacotado no Web.
+        // Fallback hard-coded permanece caso o arquivo não esteja presente.
+        return Task.FromResult(CidadesIbgeJsonLoader.Lista);
     }
 
     public Task<IReadOnlyList<BancoItem>> GetBancosAsync(CancellationToken ct = default)
@@ -95,19 +96,60 @@ internal sealed class CiotApiDomainService : IDomainService
 internal static class TipoCargaFallback
 {
     // Mapeia código CIOT (TipoCargaANTT) → unidades válidas
+    // TipoCargaANTT (12 itens) → unidades aplicáveis. Espelha família perigosa nas não-perigosas.
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<UnidadeMedidaItem>> UnidadesPorTipo =
         new Dictionary<string, IReadOnlyList<UnidadeMedidaItem>>
         {
-            ["1"]  = [new("TON","Tonelada","1"), new("KG","Quilo","1")],
-            ["2"]  = [new("LT","Litro","2"),     new("M3","Metro Cúbico","2")],
-            ["3"]  = [new("TON","Tonelada","3"), new("KG","Quilo","3")],
-            ["4"]  = [new("C20","Container 20'","4"), new("C40","Container 40'","4")],
-            ["5"]  = [new("TON","Tonelada","5"), new("VOL","Volumes","5"), new("UN","Unidades","5")],
+            ["1"]  = [new("TON","Tonelada","1"), new("KG","Quilo","1")],                                  // Granel sólido
+            ["2"]  = [new("LT","Litro","2"),     new("M3","Metro Cúbico","2")],                            // Granel líquido
+            ["3"]  = [new("TON","Tonelada","3"), new("KG","Quilo","3")],                                  // Frigorificada
+            ["4"]  = [new("C20","Container 20'","4"), new("C40","Container 40'","4")],                    // Conteinerizada
+            ["5"]  = [new("TON","Tonelada","5"), new("VOL","Volumes","5"), new("UN","Unidades","5")],     // Carga Geral
+            ["6"]  = [new("TON","Tonelada","6"), new("M3","Metro Cúbico","6")],                            // Neogranel
+            ["7"]  = [new("TON","Tonelada","7"), new("KG","Quilo","7")],                                  // Perigosa granel sólido
+            ["8"]  = [new("LT","Litro","8"),     new("M3","Metro Cúbico","8")],                            // Perigosa granel líquido
+            ["9"]  = [new("TON","Tonelada","9"), new("KG","Quilo","9")],                                  // Perigosa frigorificada
+            ["10"] = [new("C20","Container 20'","10"), new("C40","Container 40'","10")],                  // Perigosa conteinerizada
+            ["11"] = [new("TON","Tonelada","11"), new("VOL","Volumes","11"), new("UN","Unidades","11")],  // Perigosa carga geral
+            ["12"] = [new("M3","Metro Cúbico","12"), new("KG","Quilo","12")],                              // Carga Granel Pressurizada
         };
+}
+
+internal static class CidadesIbgeJsonLoader
+{
+    private static readonly Lazy<IReadOnlyList<CidadeIbgeItem>> _lista = new(Carregar);
+
+    public static IReadOnlyList<CidadeIbgeItem> Lista => _lista.Value;
+
+    private static IReadOnlyList<CidadeIbgeItem> Carregar()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Data", "cidades-ibge.json");
+        if (!File.Exists(path)) return CidadesFallback.Lista;
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var raw = System.Text.Json.JsonSerializer.Deserialize<CidadeIbgeJsonRecord[]>(stream);
+            if (raw is null || raw.Length == 0) return CidadesFallback.Lista;
+
+            return raw
+                .Where(r => !string.IsNullOrWhiteSpace(r.ibge) && !string.IsNullOrWhiteSpace(r.nome))
+                .Select(r => new CidadeIbgeItem(r.ibge!, r.nome!, r.uf ?? string.Empty))
+                .OrderBy(c => c.Cidade, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch
+        {
+            return CidadesFallback.Lista;
+        }
+    }
+
+    private record CidadeIbgeJsonRecord(string? ibge, string? nome, string? uf);
 }
 
 internal static class CidadesFallback
 {
+    // Fallback caso cidades-ibge.json não esteja presente no output (deploy mal-formado).
     public static readonly IReadOnlyList<CidadeIbgeItem> Lista =
     [
         new("3550308", "São Paulo",      "SP"),

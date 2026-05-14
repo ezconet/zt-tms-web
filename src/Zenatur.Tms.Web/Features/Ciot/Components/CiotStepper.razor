@@ -1,5 +1,6 @@
 @using Zenatur.Ciot.Client
 @using Zenatur.Ciot.Client.Favorecidos
+@using Zenatur.Ciot.Client.Roteirizacao
 @using Zenatur.Ciot.Client.Shared
 @using Zenatur.Ciot.Client.Viagem
 @using Zenatur.Tms.Application.Domain
@@ -170,7 +171,7 @@
     </MudStep>
 
     @* ── FASE 2: Logística e Veículo ── *@
-    <MudStep Title="Logística">
+    <MudStep Title="Logística" HasError="@(!_fase2Valida && _erroFase2 is not null)">
         <MudGrid Spacing="3" Class="mt-2">
 
             <MudItem xs="12" md="6">
@@ -248,33 +249,45 @@
             </MudItem>
 
             <MudItem xs="12" md="6">
-                <MudSelect T="string" @bind-Value="_vm.OrigemIbge" @bind-Value:after="OnOrigemSelected"
-                           Label="Cidade de Origem"
-                           Variant="Variant.Outlined"
-                           Required="true"
-                           HelperText="Selecione a cidade (Domínio IBGE)"
-                           Adornment="Adornment.Start"
-                           AdornmentIcon="@Icons.Material.Filled.LocationOn">
-                    @foreach (var c in _cidadesIbge)
-                    {
-                        <MudSelectItem Value="@c.Ibge">@c.Descricao</MudSelectItem>
-                    }
-                </MudSelect>
+                <MudAutocomplete T="CidadeIbgeItem"
+                                 Value="_origemSelecionada"
+                                 ValueChanged="OnOrigemAutocompleteChanged"
+                                 SearchFunc="BuscarCidades"
+                                 ToStringFunc="@(c => c?.Descricao ?? string.Empty)"
+                                 Label="Cidade de Origem"
+                                 Variant="Variant.Outlined"
+                                 Required="true"
+                                 HelperText="Digite nome ou UF — setas + Enter para selecionar"
+                                 Clearable="true"
+                                 MaxItems="50"
+                                 MinCharacters="1"
+                                 DebounceInterval="200"
+                                 OpenOnFocus="false"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="true"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.LocationOn" />
             </MudItem>
 
             <MudItem xs="12" md="6">
-                <MudSelect T="string" @bind-Value="_vm.DestinoIbge" @bind-Value:after="OnDestinoSelected"
-                           Label="Cidade de Destino"
-                           Variant="Variant.Outlined"
-                           Required="true"
-                           HelperText="Selecione a cidade (Domínio IBGE)"
-                           Adornment="Adornment.Start"
-                           AdornmentIcon="@Icons.Material.Filled.Flag">
-                    @foreach (var c in _cidadesIbge)
-                    {
-                        <MudSelectItem Value="@c.Ibge">@c.Descricao</MudSelectItem>
-                    }
-                </MudSelect>
+                <MudAutocomplete T="CidadeIbgeItem"
+                                 Value="_destinoSelecionada"
+                                 ValueChanged="OnDestinoAutocompleteChanged"
+                                 SearchFunc="BuscarCidades"
+                                 ToStringFunc="@(c => c?.Descricao ?? string.Empty)"
+                                 Label="Cidade de Destino"
+                                 Variant="Variant.Outlined"
+                                 Required="true"
+                                 HelperText="Digite nome ou UF — setas + Enter para selecionar"
+                                 Clearable="true"
+                                 MaxItems="50"
+                                 MinCharacters="1"
+                                 DebounceInterval="200"
+                                 OpenOnFocus="false"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="true"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.Flag" />
             </MudItem>
 
             @if (!string.IsNullOrEmpty(_vm.OrigemDescricao) && !string.IsNullOrEmpty(_vm.DestinoDescricao))
@@ -307,6 +320,40 @@
     <MudStep Title="Valores">
         <MudGrid Spacing="3" Class="mt-2">
 
+            @if (_vm.DistanciaKm is decimal km && _vm.FreteMinimoAntt is decimal freteMin)
+            {
+                <MudItem xs="12">
+                    <MudPaper Elevation="0" Class="pa-3"
+                              Style="background:#FFF8E1; border:1px solid #FBC02D; border-radius:8px;">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                            <MudIcon Icon="@Icons.Material.Filled.Route" Color="Color.Warning" />
+                            <MudText Typo="Typo.body2">
+                                <strong>Rota Pamcard:</strong> @km.ToString("N0", _culturaBr) km
+                                · <strong>Pedágio:</strong> @_vm.ValorPedagio.ToString("C", _culturaBr)
+                                · <strong>Frete mínimo ANTT:</strong> @freteMin.ToString("C", _culturaBr)
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            }
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_vm.ContratacaoTipo" @bind-Value:after="RecalcularFreteMinimoAsync"
+                           Label="Tipo de Contratação"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           HelperText="Pamcard TipoContratacao">
+                    <MudSelectItem Value="@("1")">Carga Lotação</MudSelectItem>
+                    <MudSelectItem Value="@("2")">Contratação Apenas do Veículo Automotor de Cargas</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudCheckBox T="bool" @bind-Value="_vm.AltoDesempenho" @bind-Value:after="RecalcularFreteMinimoAsync"
+                             Label="Veículo de alto desempenho (ANTT Res. 5867/2020)"
+                             Color="Color.Primary" />
+            </MudItem>
+
             <MudItem xs="12" md="4">
                 <MudNumericField T="decimal" @bind-Value="_vm.ValorFrete" @bind-Value:after="RecalcularParcelas"
                                  Label="Valor do Frete (R$)"
@@ -314,8 +361,17 @@
                                  Format="N2" Culture="@_culturaBr"
                                  Min="0m" HideSpinButtons="false"
                                  Required="true"
-                                 HelperText="Valor bruto da operação" />
+                                 HelperText="@(_vm.FreteMinimoAntt is decimal fm ? $"ANTT mínimo: {fm.ToString("C", _culturaBr)}" : "Valor bruto da operação")" />
             </MudItem>
+
+            @if (_vm.FreteMinimoAntt is decimal min2 && _vm.ValorFrete > 0 && _vm.ValorFrete < min2)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Filled.Warning">
+                        Valor de frete (@_vm.ValorFrete.ToString("C", _culturaBr)) abaixo do mínimo ANTT (@min2.ToString("C", _culturaBr)).
+                    </MudAlert>
+                </MudItem>
+            }
 
             <MudItem xs="12" md="4">
                 <MudNumericField T="decimal" @bind-Value="_vm.ValorPedagio"
@@ -575,6 +631,25 @@
         _favorecido is not null &&
         (_favorecido.RntrcAtivo || Env.IsDevelopment()); // dev bypass — bug 1.7
 
+    private static readonly System.Text.RegularExpressions.Regex _placaRegex = new(
+        @"^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private bool _fase2Valida =>
+        !string.IsNullOrWhiteSpace(_vm.TipoVeiculo) &&
+        !string.IsNullOrWhiteSpace(_vm.TipoCarga) &&
+        !string.IsNullOrWhiteSpace(_vm.UnidadeMedida) &&
+        !string.IsNullOrEmpty(_vm.OrigemIbge) &&
+        !string.IsNullOrEmpty(_vm.DestinoIbge) &&
+        PlacaValida(_vm.VeiculoPlaca);
+
+    private static bool PlacaValida(string? placa)
+    {
+        if (string.IsNullOrWhiteSpace(placa)) return false;
+        var limpa = placa.Replace("-", "").ToUpperInvariant();
+        return _placaRegex.IsMatch(limpa);
+    }
+
     private CancellationTokenSource? _debounce;
 
     // ── Fase 2: domínios via DomainService (cache T17) + veículos do Bridge ──
@@ -613,6 +688,12 @@
 
         await AtualizarUnidadesFiltradasAsync();
 
+        // Restaura seleção visual dos autocompletes se sessão reaberta com cidades já escolhidas
+        if (!string.IsNullOrEmpty(_vm.OrigemIbge))
+            _origemSelecionada = _cidadesIbge.FirstOrDefault(c => c.Ibge == _vm.OrigemIbge);
+        if (!string.IsNullOrEmpty(_vm.DestinoIbge))
+            _destinoSelecionada = _cidadesIbge.FirstOrDefault(c => c.Ibge == _vm.DestinoIbge);
+
         // Restaura meios do favorecido se já existia (sessão re-aberta)
         if (_favorecido is not null) _meiosFavorecido = _favorecido.MeiosPagamento;
     }
@@ -645,7 +726,8 @@
 
         try
         {
-            var docTipo  = documento.Length == 11 ? 1 : 2; // 1=CPF, 2=CNPJ
+            // Pamcard contract: 1=CNPJ, 2=CPF, 5=RNTRC PF, 6=RNTRC PJ
+            var docTipo  = documento.Length == 11 ? 2 : 1;
 
             // 2 fontes em paralelo (CIOT + LegacyBridge)
             var ciotTask = CiotClient.Favorecidos.FindAsync(new FindFavoredRequest
@@ -718,15 +800,18 @@
             _vm.FavorecidoRntrc     = _favorecido.Rntrc;
 
             // Pré-popula Fase 2 com primeiro veículo do Bridge (se houver).
-            // TipoVeiculo legado tem codificação própria (id+descrição) — NÃO pré-preenche
-            // o combo CIOT (CategoriaVeiculo SEFAZ); usuário escolhe manualmente.
-            // De-para legado→CIOT em TipoVeiculoLegadoMapper (futuro).
+            // De/Para legado→Pamcard só para códigos de alta confiança (TipoVeiculoLegadoMapper).
             _veiculosBridge = bridgeResult?.Veiculos ?? [];
             _tipoVeiculoBridgeSugestao = _veiculosBridge.FirstOrDefault()?.TipoVeiculo;
             var v = _veiculosBridge.FirstOrDefault();
             if (v is not null && string.IsNullOrEmpty(_vm.VeiculoPlaca))
             {
                 _vm.VeiculoPlaca = v.Placa.Replace("-", "").ToUpperInvariant();
+            }
+            if (v?.TipoVeiculo is not null && string.IsNullOrEmpty(_vm.TipoVeiculo))
+            {
+                var pamcardId = TipoVeiculoLegadoMapper.MapearParaPamcard(v.TipoVeiculo.Id);
+                if (pamcardId is not null) _vm.TipoVeiculo = pamcardId;
             }
 
             // reset meio pagamento se já tinha selecionado e não está mais disponível
@@ -746,14 +831,16 @@
         }
     }
 
-    private Task OnStepperPreview(StepperInteractionEventArgs args)
+    private async Task OnStepperPreview(StepperInteractionEventArgs args)
     {
-        if (args.Action != StepAction.Activate) return Task.CompletedTask;
+        // Próximo button → StepAction.Complete; header click → StepAction.Activate.
+        if (args.Action != StepAction.Activate && args.Action != StepAction.Complete)
+            return;
 
         var saindoDe = _faseIndex;
-        var indoPara = args.StepIndex;
+        var indoPara = args.Action == StepAction.Complete ? saindoDe + 1 : args.StepIndex;
 
-        if (indoPara <= saindoDe) return Task.CompletedTask;
+        if (indoPara <= saindoDe) return;
 
         // ── Fase 1 → 2 ──
         if (saindoDe == 0)
@@ -762,13 +849,13 @@
             {
                 Snackbar.Add("Informe o CNPJ do Contratante.", Severity.Warning);
                 args.Cancel = true;
-                return Task.CompletedTask;
+                return;
             }
             if (_favorecido is null)
             {
                 Snackbar.Add("Busque e selecione um Favorecido.", Severity.Warning);
                 args.Cancel = true;
-                return Task.CompletedTask;
+                return;
             }
             if (!_favorecido.RntrcAtivo)
             {
@@ -776,7 +863,7 @@
                 {
                     Snackbar.Add("RNTRC inativo — emissão não permitida.", Severity.Error);
                     args.Cancel = true;
-                    return Task.CompletedTask;
+                    return;
                 }
                 // Dev bypass — bug 1.7: legado sempre retorna ativo:null/false
                 Snackbar.Add("⚠ Modo DEV: RNTRC inativo ignorado.", Severity.Warning);
@@ -789,27 +876,24 @@
             _erroFase2 = null;
 
             if (string.IsNullOrWhiteSpace(_vm.TipoVeiculo))
-            { _erroFase2 = "Selecione o Tipo de Veículo."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase2 = "Selecione o Tipo de Veículo."; args.Cancel = true; return; }
 
-            var placaLimpa = (_vm.VeiculoPlaca ?? "").Replace("-", "");
-            if (placaLimpa.Length != 7 || !placaLimpa.All(char.IsLetterOrDigit))
-            { _erroFase2 = "Placa inválida — Mercosul exige 7 caracteres alfanuméricos."; args.Cancel = true; return Task.CompletedTask; }
+            if (!PlacaValida(_vm.VeiculoPlaca))
+            { _erroFase2 = "Placa inválida — padrão antigo (ABC1234) ou Mercosul (ABC1D23)."; args.Cancel = true; return; }
 
             if (string.IsNullOrWhiteSpace(_vm.TipoCarga))
-            { _erroFase2 = "Selecione o Tipo de Carga."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase2 = "Selecione o Tipo de Carga."; args.Cancel = true; return; }
 
             if (string.IsNullOrWhiteSpace(_vm.UnidadeMedida))
-            { _erroFase2 = "Selecione a Unidade de Medida."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase2 = "Selecione a Unidade de Medida."; args.Cancel = true; return; }
 
             if (string.IsNullOrEmpty(_vm.OrigemIbge))
-            { _erroFase2 = "Selecione a cidade de Origem."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase2 = "Selecione a cidade de Origem."; args.Cancel = true; return; }
 
             if (string.IsNullOrEmpty(_vm.DestinoIbge))
-            { _erroFase2 = "Selecione a cidade de Destino."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase2 = "Selecione a cidade de Destino."; args.Cancel = true; return; }
 
-            if (_vm.OrigemIbge == _vm.DestinoIbge)
-            { _erroFase2 = "Origem e Destino não podem ser a mesma cidade."; args.Cancel = true; return Task.CompletedTask; }
-
+            await CalcularRotaEFreteMinimoAsync();
             State.AvancarFase();
         }
         // ── Fase 3 → 4 ──
@@ -818,28 +902,108 @@
             _erroFase3 = null;
 
             if (_vm.ValorFrete <= 0)
-            { _erroFase3 = "Valor do Frete deve ser maior que zero."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase3 = "Valor do Frete deve ser maior que zero."; args.Cancel = true; return; }
 
             if (_vm.ValorLiquido <= 0)
-            { _erroFase3 = "Valor líquido (Frete + Pedágio − Impostos) deve ser positivo."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase3 = "Valor líquido (Frete + Pedágio − Impostos) deve ser positivo."; args.Cancel = true; return; }
 
             if (string.IsNullOrEmpty(_vm.MeioPagamento))
-            { _erroFase3 = "Selecione o Meio de Pagamento."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase3 = "Selecione o Meio de Pagamento."; args.Cancel = true; return; }
 
             // valida que o meio de pagamento pertence ao favorecido (Fail-Fast da spec)
             if (!_meiosFavorecido.Any(m => m.Identificador == _vm.MeioPagamento))
-            { _erroFase3 = "Meio de pagamento selecionado não está vinculado ao favorecido."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase3 = "Meio de pagamento selecionado não está vinculado ao favorecido."; args.Cancel = true; return; }
 
             if (_vm.DataVencimento is null || _vm.DataVencimento.Value.Date < DateTime.Today)
-            { _erroFase3 = "Data de vencimento deve ser hoje ou futura."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase3 = "Data de vencimento deve ser hoje ou futura."; args.Cancel = true; return; }
 
             if (_vm.Parcelas.Count == 0)
-            { _erroFase3 = "Cronograma de parcelas inválido — revise os valores."; args.Cancel = true; return Task.CompletedTask; }
+            { _erroFase3 = "Cronograma de parcelas inválido — revise os valores."; args.Cancel = true; return; }
 
             State.AvancarFase();
         }
 
-        return Task.CompletedTask;
+        return;
+    }
+
+    // ── Fase 2 → 3: Roteirização + Frete Mínimo ANTT ──
+    private async Task CalcularRotaEFreteMinimoAsync()
+    {
+        if (string.IsNullOrEmpty(_vm.ContratanteCnpj) ||
+            string.IsNullOrEmpty(_vm.TipoVeiculo)     ||
+            string.IsNullOrEmpty(_vm.TipoCarga)       ||
+            !int.TryParse(_vm.OrigemIbge,  out var ibgeOrig) ||
+            !int.TryParse(_vm.DestinoIbge, out var ibgeDest)) return;
+
+        try
+        {
+            var routerTask = CiotClient.Roteirizacao.RouterAsync(new RouterRequest
+            {
+                ContratanteCnpj  = _vm.ContratanteCnpj,
+                VeiculoCategoria = _vm.TipoVeiculo,
+                Origem           = new CidadeLocalizacao { Ibge = ibgeOrig },
+                Destino          = new CidadeLocalizacao { Ibge = ibgeDest },
+                ObterPraca       = true,
+                ObterRota        = true,
+                IdaVolta         = false,
+                ObterUf          = false,
+                ObterPostos      = false,
+                PedagioCaminho   = 1,
+            });
+
+            var router = await routerTask;
+            decimal km;
+            if (router.IsSuccess && router.Value.Km > 0)
+            {
+                km = router.Value.Km;
+                _vm.DistanciaKm  = km;
+                _vm.ValorPedagio = router.Value.PedagioValor;
+            }
+            else
+            {
+                Snackbar.Add("Falha ao calcular rota Pamcard.", Severity.Warning);
+                return;
+            }
+
+            await BuscarFreteMinimoAsync(km);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro na roteirização: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task BuscarFreteMinimoAsync(decimal km)
+    {
+        if (string.IsNullOrEmpty(_vm.ContratanteCnpj) ||
+            string.IsNullOrEmpty(_vm.TipoVeiculo)     ||
+            !int.TryParse(_vm.TipoCarga, out var cargaTipo)) return;
+
+        var fm = await CiotClient.Roteirizacao.FindMinimumFreightAsync(new FindMinimumFreightRequest
+        {
+            ContratanteCnpj  = _vm.ContratanteCnpj,
+            VeiculoCategoria = _vm.TipoVeiculo,
+            DistanciaKm      = km,
+            CargaTipo        = cargaTipo,
+            AltoDesempenho   = _vm.AltoDesempenho,
+            ContratacaoTipo  = _vm.ContratacaoTipo,
+        });
+
+        if (fm.IsSuccess && fm.Value.FreteMinimo > 0)
+        {
+            _vm.FreteMinimoAntt = fm.Value.FreteMinimo;
+            if (_vm.ValorFrete <= 0) _vm.ValorFrete = fm.Value.FreteMinimo;
+            RecalcularParcelas();
+        }
+        else
+        {
+            Snackbar.Add("Falha ao obter frete mínimo ANTT.", Severity.Warning);
+        }
+    }
+
+    private async Task RecalcularFreteMinimoAsync()
+    {
+        if (_vm.DistanciaKm is decimal km) await BuscarFreteMinimoAsync(km);
     }
 
     // ── Fase 2: handlers ──
@@ -871,15 +1035,35 @@
         _unidadesFiltradas = lista.ToList();
     }
 
-    private void OnOrigemSelected()
+    private CidadeIbgeItem? _origemSelecionada;
+    private CidadeIbgeItem? _destinoSelecionada;
+
+    private Task<IEnumerable<CidadeIbgeItem>> BuscarCidades(string? termo, CancellationToken ct)
     {
-        var c = _cidadesIbge.FirstOrDefault(x => x.Ibge == _vm.OrigemIbge);
+        if (string.IsNullOrWhiteSpace(termo))
+            return Task.FromResult(Enumerable.Empty<CidadeIbgeItem>());
+
+        var t = termo.Trim();
+        var filtro = _cidadesIbge
+            .Where(c =>
+                c.Cidade.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                c.Uf.Equals(t, StringComparison.OrdinalIgnoreCase))
+            .Take(50);
+
+        return Task.FromResult(filtro);
+    }
+
+    private void OnOrigemAutocompleteChanged(CidadeIbgeItem? c)
+    {
+        _origemSelecionada  = c;
+        _vm.OrigemIbge      = c?.Ibge;
         _vm.OrigemDescricao = c?.Descricao;
     }
 
-    private void OnDestinoSelected()
+    private void OnDestinoAutocompleteChanged(CidadeIbgeItem? c)
     {
-        var c = _cidadesIbge.FirstOrDefault(x => x.Ibge == _vm.DestinoIbge);
+        _destinoSelecionada = c;
+        _vm.DestinoIbge      = c?.Ibge;
         _vm.DestinoDescricao = c?.Descricao;
     }
 

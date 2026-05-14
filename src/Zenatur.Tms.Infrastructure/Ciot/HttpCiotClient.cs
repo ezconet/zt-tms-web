@@ -20,7 +20,7 @@ internal sealed class HttpCiotClient : ICiotClient
         Favorecidos  = new HttpFavorecidosSubClient(http);
         Viagem       = new HttpViagemSubClient(http);
         Conformidade = new NotImplementedConformidadeClient();
-        Roteirizacao = new NotImplementedRoteirizacaoClient();
+        Roteirizacao = new HttpRoteirizacaoSubClient(http);
         Outbox       = new HttpOutboxSubClient(http);
     }
 
@@ -109,14 +109,43 @@ internal sealed class NotImplementedConformidadeClient : IConformidadeClient
         Task.FromResult(Result.Fail<FindTagResponse>("HttpCiotClient: Conformidade não usada pelo TMS hoje."));
 }
 
-internal sealed class NotImplementedRoteirizacaoClient : IRoteirizacaoClient
+internal sealed class HttpRoteirizacaoSubClient : IRoteirizacaoClient
 {
-    public Task<Result<RouterResponse>>             RouterAsync(RouterRequest r, CancellationToken ct = default) =>
-        Task.FromResult(Result.Fail<RouterResponse>("HttpCiotClient: Roteirização não usada pelo TMS hoje."));
-    public Task<Result<InsertRouteResponse>>        InsertRouteAsync(InsertRouteRequest r, CancellationToken ct = default) =>
-        Task.FromResult(Result.Fail<InsertRouteResponse>("HttpCiotClient: não implementado."));
-    public Task<Result<FindMinimumFreightResponse>> FindMinimumFreightAsync(FindMinimumFreightRequest r, CancellationToken ct = default) =>
-        Task.FromResult(Result.Fail<FindMinimumFreightResponse>("HttpCiotClient: não implementado."));
+    private readonly CiotApiHttpClient _http;
+    public HttpRoteirizacaoSubClient(CiotApiHttpClient http) => _http = http;
+
+    public Task<Result<RouterResponse>> RouterAsync(RouterRequest r, CancellationToken ct = default)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"ContratanteCnpj={Uri.EscapeDataString(r.ContratanteCnpj)}");
+        sb.Append($"&VeiculoCategoria={Uri.EscapeDataString(r.VeiculoCategoria)}");
+        if (r.Origem?.Ibge is int oibge)   sb.Append($"&Origem.Ibge={oibge}");
+        if (r.Destino?.Ibge is int dibge)  sb.Append($"&Destino.Ibge={dibge}");
+        sb.Append($"&ObterPraca={r.ObterPraca.ToString().ToLowerInvariant()}");
+        sb.Append($"&ObterRota={r.ObterRota.ToString().ToLowerInvariant()}");
+        sb.Append($"&IdaVolta={r.IdaVolta.ToString().ToLowerInvariant()}");
+        sb.Append($"&ObterUf={r.ObterUf.ToString().ToLowerInvariant()}");
+        sb.Append($"&ObterPostos={r.ObterPostos.ToString().ToLowerInvariant()}");
+        if (r.PedagioCaminho is int pc) sb.Append($"&PedagioCaminho={pc}");
+        return _http.GetAsync<RouterResponse>($"/api/v1/roteirizacao/rota?{sb}", ct);
+    }
+
+    public Task<Result<InsertRouteResponse>> InsertRouteAsync(InsertRouteRequest r, CancellationToken ct = default) =>
+        _http.PostAsync<InsertRouteRequest, InsertRouteResponse>("/api/v1/roteirizacao/rota", r, ct);
+
+    public Task<Result<FindMinimumFreightResponse>> FindMinimumFreightAsync(FindMinimumFreightRequest r, CancellationToken ct = default)
+    {
+        var unidadeTipo = string.IsNullOrEmpty(r.UnidadeDocTipo) ? "" : $"&UnidadeDocTipo={Uri.EscapeDataString(r.UnidadeDocTipo)}";
+        var unidadeNum  = string.IsNullOrEmpty(r.UnidadeDocNumero) ? "" : $"&UnidadeDocNumero={Uri.EscapeDataString(r.UnidadeDocNumero)}";
+        var qs = $"ContratanteCnpj={Uri.EscapeDataString(r.ContratanteCnpj)}" +
+                 $"&VeiculoCategoria={Uri.EscapeDataString(r.VeiculoCategoria)}" +
+                 $"&DistanciaKm={r.DistanciaKm.ToString(System.Globalization.CultureInfo.InvariantCulture)}" +
+                 $"&CargaTipo={r.CargaTipo}" +
+                 $"&AltoDesempenho={r.AltoDesempenho.ToString().ToLowerInvariant()}" +
+                 $"&ContratacaoTipo={Uri.EscapeDataString(r.ContratacaoTipo)}" +
+                 unidadeTipo + unidadeNum;
+        return _http.GetAsync<FindMinimumFreightResponse>($"/api/v1/roteirizacao/frete-minimo?{qs}", ct);
+    }
 }
 
 internal sealed class HttpOutboxSubClient : IOutboxClient
