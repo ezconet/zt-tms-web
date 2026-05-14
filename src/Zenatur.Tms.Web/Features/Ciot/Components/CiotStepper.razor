@@ -145,7 +145,7 @@
                                             <MudChip T="string" Size="Size.Small" Label="true"
                                                      Icon="@Icons.Material.Filled.LocalShipping"
                                                      Style="background:#EFF6FF; color:#1D4ED8; font-size:11px; font-family:monospace;">
-                                                @v.Placa.ToUpper() · @v.TipoVeiculo.Descricao @(string.IsNullOrEmpty(v.Modelo) ? "" : "· " + v.Modelo)
+                                                @v.Placa.ToUpper() @(string.IsNullOrEmpty(v.TipoVeiculo?.Descricao) ? "" : "· " + v.TipoVeiculo.Descricao) @(string.IsNullOrEmpty(v.Modelo) ? "" : "· " + v.Modelo)
                                             </MudChip>
                                         }
                                     </MudChipSet>
@@ -184,7 +184,9 @@
                         <MudSelectItem Value="@v.Codigo">@v.Descricao</MudSelectItem>
                     }
                 </MudSelect>
-                @if (_tipoVeiculoBridgeSugestao is not null)
+                @if (_tipoVeiculoBridgeSugestao is not null &&
+                     _tipoVeiculoBridgeSugestao.Id > 0 &&
+                     !string.IsNullOrWhiteSpace(_tipoVeiculoBridgeSugestao.Descricao))
                 {
                     <MudPaper Elevation="0" Class="pa-2 mt-1"
                               Style="background:#FEF3C7; border:1px solid #FCD34D; border-radius:6px;">
@@ -679,16 +681,19 @@
             }
 
             // M1: troca de favorecido com dados preenchidos → confirma limpeza
+            // Bug 1.11: _favorecido foi zerado em OnDocumentoChanged. Usa _vm.FavorecidoDocumento (persiste no state).
+            var docAnterior  = _vm.FavorecidoDocumento;
+            var nomeAnterior = _vm.FavorecidoNome ?? "anterior";
             var trocouFavorecido =
-                _favorecido is not null &&
-                _favorecido.Documento != novoFavorecido.Documento;
+                !string.IsNullOrEmpty(docAnterior) &&
+                docAnterior != novoFavorecido.Documento;
 
             if (trocouFavorecido && PossuiDadosFasesPosteriores())
             {
                 var confirma = await DialogService.ShowMessageBoxAsync(
                     title:      "Trocar favorecido?",
-                    message:    $"Você trocou o favorecido de {_favorecido!.Nome} para {novoFavorecido.Nome}. " +
-                                "Dados das próximas fases (veículo, valores, parcelas) serão limpos para refletir o novo favorecido. Continuar?",
+                    message:    $"Você trocou o favorecido de {nomeAnterior} para {novoFavorecido.Nome}. " +
+                                "Dados das próximas fases (veículo, valores, parcelas) serão limpos. Continuar?",
                     yesText:    "Limpar e trocar",
                     noText:     null,
                     cancelText: "Manter anterior",
@@ -696,8 +701,7 @@
 
                 if (confirma != true)
                 {
-                    // Reverte: restaura documento anterior na busca, abandona o novo
-                    _documentoBusca = _favorecido!.Documento;
+                    _documentoBusca = docAnterior!;
                     Snackbar.Add("Troca cancelada. Favorecido anterior mantido.", Severity.Info);
                     return;
                 }

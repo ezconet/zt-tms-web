@@ -40,7 +40,7 @@ public record RntrcLegado(string Numero, bool? Ativo, DateOnly? Validade);
 /// </summary>
 public record VeiculoMotoristaItem(
     string                Placa,
-    TipoVeiculoLegado     TipoVeiculo,
+    TipoVeiculoLegado?    TipoVeiculo,
     string?               Renavam,
     int?                  AnoFabricacao,
     int?                  AnoModelo,
