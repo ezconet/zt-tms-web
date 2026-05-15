@@ -38,9 +38,17 @@ internal sealed class CiotApiMotoristaService : IMotoristaManagementService
         return r.IsFailed ? null : Map(r.Value);
     }
 
-    public async Task<MotoristaListItem> SalvarAsync(MotoristaListItem m, CancellationToken ct = default)
+    public async Task<MotoristaListItem> SalvarAsync(MotoristaListItem m, bool exigirNovo = false, CancellationToken ct = default)
     {
         var existente = await ObterAsync(m.Cpf, ct);
+        if (exigirNovo && existente is not null)
+            throw new InvalidOperationException($"CPF {m.Cpf} já cadastrado como motorista.");
+
+        var ddd  = SoDigitos(m.TelefoneDdd);
+        ddd      = ddd.Length > 0 ? ddd.PadLeft(3, '0') : "";
+        var fone = SoDigitos(m.TelefoneNumero);
+        if (fone.Length > 9) fone = fone[^9..];   // coluna nvarchar(9)
+
         var body = new
         {
             contratanteCnpj = ContratanteCnpj,
@@ -48,17 +56,20 @@ internal sealed class CiotApiMotoristaService : IMotoristaManagementService
             nome            = m.Nome,
             dataNascimento  = m.DataNascimento,
             email           = m.Email,
-            telefoneDdd     = m.TelefoneDdd,
-            telefoneNumero  = m.TelefoneNumero,
+            telefoneDdd     = ddd,
+            telefoneNumero  = fone,
             rntrc           = m.Rntrc,
             rntrcSituacao   = m.RntrcSituacao,
             rntrcValidade   = m.RntrcValidade,
             cnhNumero       = m.CnhNumero,
             cnhCategoria    = m.CnhCategoria,
             cnhValidade     = m.CnhValidade,
+            rgNumero        = SoDigitos(m.RgNumero),
+            rgUf            = m.RgUf,
             logradouro      = m.Logradouro,
             enderecoNumero  = m.EnderecoNumero,
             bairro          = m.Bairro,
+            cidade          = m.EnderecoCidade,
             cidadeIbge      = int.TryParse(m.EnderecoCidadeIbge, out var ci) ? ci : (int?)null,
             enderecoUf      = m.EnderecoUf,
             cep             = SoDigitos(m.Cep),
@@ -93,6 +104,15 @@ internal sealed class CiotApiMotoristaService : IMotoristaManagementService
         CnhNumero      = r.cnhNumero,
         CnhCategoria   = r.cnhCategoria,
         CnhValidade    = r.cnhValidade,
+        RgNumero       = r.rgNumero,
+        RgUf           = r.rgUf,
+        Logradouro     = r.logradouro,
+        EnderecoNumero = r.enderecoNumero,
+        Bairro         = r.bairro,
+        EnderecoCidade = r.cidade,
+        EnderecoCidadeIbge = r.cidadeIbge?.ToString(),
+        EnderecoUf     = r.enderecoUf,
+        Cep            = r.cep,
         Ativo          = r.ativo,
         AtualizadoEm   = r.atualizadoEm,
     };
@@ -111,6 +131,15 @@ internal sealed class CiotApiMotoristaService : IMotoristaManagementService
         string?   cnhNumero,
         string?   cnhCategoria,
         DateOnly? cnhValidade,
+        string?   rgNumero,
+        string?   rgUf,
+        string?   logradouro,
+        int?      enderecoNumero,
+        string?   bairro,
+        string?   cidade,
+        string?   enderecoUf,
+        string?   cep,
+        int?      cidadeIbge,
         bool      ativo,
         DateTime  atualizadoEm);
 }

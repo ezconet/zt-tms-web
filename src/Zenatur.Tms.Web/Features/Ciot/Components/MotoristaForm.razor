@@ -49,6 +49,17 @@
             <MudItem xs="12" md="3">
                 <MudTextField @bind-Value="_form.CnhCategoria" Label="CNH Categoria" Variant="Variant.Outlined" />
             </MudItem>
+            <MudItem xs="8" md="4">
+                <MudTextField @bind-Value="_form.RgNumero" Label="RG" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="4" md="2">
+                <MudSelect T="string" @bind-Value="_form.RgUf" Label="UF RG" Variant="Variant.Outlined">
+                    @foreach (var uf in _ufs)
+                    {
+                        <MudSelectItem Value="@uf">@uf</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
             @if (_erro is not null)
             {
                 <MudItem xs="12"><MudAlert Severity="Severity.Error" Dense="true">@_erro</MudAlert></MudItem>
@@ -71,6 +82,12 @@
     private DateTime? _dataNasc;
     private string? _erro;
     private bool _salvando;
+
+    private static readonly string[] _ufs =
+    [
+        "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+        "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
+    ];
 
     protected override void OnInitialized()
     {
@@ -97,7 +114,7 @@
         _salvando = true;
         try
         {
-            await Service.SalvarAsync(_form);
+            await Service.SalvarAsync(_form, exigirNovo: !IsEdicao);
             Snackbar.Add($"Motorista {(IsEdicao ? "atualizado" : "cadastrado")}.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(_form));
         }

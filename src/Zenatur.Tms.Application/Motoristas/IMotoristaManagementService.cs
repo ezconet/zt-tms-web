@@ -4,7 +4,7 @@ public interface IMotoristaManagementService
 {
     Task<IReadOnlyList<MotoristaListItem>> ListarAsync(string? termo = null, CancellationToken ct = default);
     Task<MotoristaListItem?>               ObterAsync(string cpf, CancellationToken ct = default);
-    Task<MotoristaListItem>                SalvarAsync(MotoristaListItem motorista, CancellationToken ct = default);
+    Task<MotoristaListItem>                SalvarAsync(MotoristaListItem motorista, bool exigirNovo = false, CancellationToken ct = default);
 }
 
 public class MotoristaListItem
@@ -22,9 +22,12 @@ public class MotoristaListItem
     public string?   CnhNumero      { get; set; }
     public string?   CnhCategoria   { get; set; }
     public DateOnly? CnhValidade    { get; set; }
+    public string?   RgNumero           { get; set; }
+    public string?   RgUf               { get; set; }
     public string?   Logradouro         { get; set; }
     public int?      EnderecoNumero     { get; set; }
     public string?   Bairro             { get; set; }
+    public string?   EnderecoCidade     { get; set; }
     public string?   EnderecoCidadeIbge { get; set; }
     public string?   EnderecoUf         { get; set; }
     public string?   Cep                { get; set; }
@@ -37,8 +40,10 @@ public class MotoristaListItem
         Rntrc = Rntrc, RntrcSituacao = RntrcSituacao, RntrcValidade = RntrcValidade,
         TelefoneDdd = TelefoneDdd, TelefoneNumero = TelefoneNumero,
         CnhNumero = CnhNumero, CnhCategoria = CnhCategoria, CnhValidade = CnhValidade,
+        RgNumero = RgNumero, RgUf = RgUf,
         Logradouro = Logradouro, EnderecoNumero = EnderecoNumero, Bairro = Bairro,
-        EnderecoCidadeIbge = EnderecoCidadeIbge, EnderecoUf = EnderecoUf, Cep = Cep,
+        EnderecoCidade = EnderecoCidade, EnderecoCidadeIbge = EnderecoCidadeIbge,
+        EnderecoUf = EnderecoUf, Cep = Cep,
         Ativo = Ativo, AtualizadoEm = AtualizadoEm,
     };
 }

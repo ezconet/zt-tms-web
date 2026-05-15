@@ -93,7 +93,8 @@
 
     private async Task AbrirEdicao(MotoristaListItem m)
     {
-        var p = new DialogParameters { ["Original"] = m };
+        var completo = await Service.ObterAsync(m.Cpf) ?? m;
+        var p = new DialogParameters { ["Original"] = completo };
         var d = await Dialog.ShowAsync<MotoristaForm>("Editar Motorista", p,
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
         if (await d.Result is { Canceled: false }) await CarregarAsync();
