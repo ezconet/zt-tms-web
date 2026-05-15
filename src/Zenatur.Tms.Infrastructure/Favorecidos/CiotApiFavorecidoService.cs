@@ -79,6 +79,8 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
                 nome             = favorecido.Nome,
                 dataNascimento   = favorecido.DataNascimento,
                 email            = favorecido.Email,
+                rntrc            = favorecido.Rntrc,
+                rntrcSituacao    = favorecido.RntrcSituacao,
                 logradouro       = favorecido.EnderecoLogradouro,
                 enderecoNumero   = int.TryParse(favorecido.EnderecoNumero, out var n) ? n : (int?)null,
                 bairro           = favorecido.EnderecoBairro,
