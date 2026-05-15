@@ -24,6 +24,7 @@ public class FavorecidoListItem
     public string?   EnderecoLogradouro { get; set; }
     public string?   EnderecoNumero     { get; set; }
     public string?   EnderecoBairro     { get; set; }
+    public string?   EnderecoCidade     { get; set; }
     public string?   EnderecoCidadeIbge { get; set; }
     public string?   EnderecoUf         { get; set; }
     public string?   EnderecoCep        { get; set; }
@@ -51,6 +52,7 @@ public class FavorecidoListItem
         EnderecoLogradouro = EnderecoLogradouro,
         EnderecoNumero     = EnderecoNumero,
         EnderecoBairro     = EnderecoBairro,
+        EnderecoCidade     = EnderecoCidade,
         EnderecoCidadeIbge = EnderecoCidadeIbge,
         EnderecoUf         = EnderecoUf,
         EnderecoCep        = EnderecoCep,
