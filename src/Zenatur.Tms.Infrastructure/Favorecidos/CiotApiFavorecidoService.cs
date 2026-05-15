@@ -48,10 +48,18 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
         return MapFull(r.Value);
     }
 
+    private static string SoDigitos(string? s) => new((s ?? "").Where(char.IsDigit).ToArray());
+
     public async Task<FavorecidoListItem> SalvarAsync(FavorecidoListItem favorecido, CancellationToken ct = default)
     {
         // Tenta obter pra decidir POST vs PUT
         var existente = await ObterAsync(favorecido.Documento, ct);
+
+        // Sanitização exigida pela Pamcard
+        var cep    = SoDigitos(favorecido.EnderecoCep);
+        var dddRaw = SoDigitos(favorecido.TelefoneDdd);
+        var ddd    = dddRaw.Length > 0 ? dddRaw.PadLeft(3, '0') : "";
+        var fone   = SoDigitos(favorecido.TelefoneNumero);
 
         if (existente is null)
         {
@@ -62,7 +70,7 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
                 new { tipo = favorecido.DocumentoTipo == 1 ? 2 : 1, numero = favorecido.Documento, uf = (string?)null }
             };
             if (favorecido.DocumentoTipo == 1 && !string.IsNullOrWhiteSpace(favorecido.RgNumero))
-                docs.Add(new { tipo = 3, numero = favorecido.RgNumero, uf = favorecido.RgUf });
+                docs.Add(new { tipo = 3, numero = SoDigitos(favorecido.RgNumero), uf = favorecido.RgUf });
 
             var insertBody = new
             {
@@ -75,13 +83,20 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
                 bairro           = favorecido.EnderecoBairro,
                 cidade           = (string?)null,
                 enderecoUf       = favorecido.EnderecoUf,
-                cep              = favorecido.EnderecoCep,
+                cep              = cep,
                 cidadeIbge       = int.TryParse(favorecido.EnderecoCidadeIbge, out var i) ? i : (int?)null,
-                telefoneDdd      = favorecido.TelefoneDdd ?? "",
-                telefoneNumero   = favorecido.TelefoneNumero ?? "",
+                telefoneDdd      = ddd,
+                telefoneNumero   = fone,
             };
-            var r = await _http.PostAsync<object, string>("/api/v1/favorecidos", insertBody, ct);
-            if (r.IsFailed) throw new InvalidOperationException("Falha ao criar favorecido: " + string.Join("; ", r.Errors.Select(e => e.Message)));
+            var r = await _http.PostAsync<object, object>("/api/v1/favorecidos", insertBody, ct);
+            if (r.IsFailed)
+            {
+                var msg = string.Join("; ", r.Errors.Select(e => e.Message));
+                // Pamcard R10: já existe → idempotente, segue (favorecido válido na Pamcard)
+                if (msg.Contains("já cadastrado", StringComparison.OrdinalIgnoreCase))
+                    return await ObterAsync(favorecido.Documento, ct) ?? favorecido;
+                throw new InvalidOperationException("Falha ao criar favorecido: " + msg);
+            }
         }
         else
         {
@@ -98,10 +113,10 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
                 bairro          = favorecido.EnderecoBairro,
                 cidade          = (string?)null,
                 enderecoUf      = favorecido.EnderecoUf,
-                cep             = favorecido.EnderecoCep,
+                cep             = cep,
                 cidadeIbge      = int.TryParse(favorecido.EnderecoCidadeIbge, out var i) ? i : (int?)null,
-                telefoneDdd     = favorecido.TelefoneDdd,
-                telefoneNumero  = favorecido.TelefoneNumero,
+                telefoneDdd     = ddd,
+                telefoneNumero  = fone,
             };
             var r = await _http.PutAsync<object, object>($"/api/v1/favorecidos/{favorecido.Documento}", updateBody, ct);
             if (r.IsFailed) throw new InvalidOperationException("Falha ao atualizar favorecido: " + string.Join("; ", r.Errors.Select(e => e.Message)));

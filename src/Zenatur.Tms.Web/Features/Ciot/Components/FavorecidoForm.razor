@@ -47,6 +47,20 @@
                                  Label="Cadastrar também como Motorista (mesmo CPF)"
                                  Color="Color.Primary" Dense="true" />
                 </MudItem>
+                @if (_tambemMotorista)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_cnhNumero"
+                                      Label="CNH Número (opcional)"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_cnhCategoria"
+                                      Label="CNH Categoria (opcional)"
+                                      Variant="Variant.Outlined"
+                                      HelperText="A, B, C, D, E" />
+                    </MudItem>
+                }
             }
 
             <MudItem xs="12" md="6">
@@ -91,18 +105,20 @@
                               InputType="InputType.Email" />
             </MudItem>
 
-            <MudItem xs="6" md="2">
-                <MudTextField @bind-Value="_form.TelefoneDdd"
-                              Label="DDD"
-                              Variant="Variant.Outlined"
-                              Required="true" />
-            </MudItem>
-
-            <MudItem xs="6" md="4">
-                <MudTextField @bind-Value="_form.TelefoneNumero"
-                              Label="Telefone"
-                              Variant="Variant.Outlined"
-                              Required="true" />
+            <MudItem xs="12" md="4">
+                <MudStack Row="true" Spacing="2">
+                    <MudTextField @bind-Value="_form.TelefoneDdd"
+                                  Label="DDD"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  Style="max-width:90px;"
+                                  HelperText="2-3 díg" />
+                    <MudTextField @bind-Value="_form.TelefoneNumero"
+                                  Label="Telefone"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  HelperText="8-9 díg" />
+                </MudStack>
             </MudItem>
 
             <MudItem xs="12" md="4">
@@ -289,6 +305,8 @@
     private string?            _erro;
     private bool               _salvando;
     private bool               _tambemMotorista = true;
+    private string?            _cnhNumero;
+    private string?            _cnhCategoria;
     private CidadeIbgeItem?    _cidadeSelecionada;
     private IReadOnlyList<CidadeIbgeItem> _cidades = [];
 
@@ -403,6 +421,8 @@
                         RntrcSituacao  = _form.RntrcSituacao,
                         TelefoneDdd    = _form.TelefoneDdd,
                         TelefoneNumero = _form.TelefoneNumero,
+                        CnhNumero      = _cnhNumero,
+                        CnhCategoria   = _cnhCategoria,
                     });
                     Snackbar.Add("Favorecido + Motorista cadastrados.", Severity.Success);
                 }
