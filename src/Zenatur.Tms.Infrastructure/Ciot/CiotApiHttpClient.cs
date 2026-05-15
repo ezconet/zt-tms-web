@@ -55,11 +55,48 @@ public sealed class CiotApiHttpClient
         }
     }
 
+    public async Task<Result<TResponse>> PutAsync<TRequest, TResponse>(
+        string url, TRequest body, CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await _http.PutAsJsonAsync(url, body, _json, ct);
+            return await ParseResponseAsync<TResponse>(response, url, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha PUT {Url}", url);
+            return Result.Fail<TResponse>($"Falha na chamada CIOT: {ex.Message}");
+        }
+    }
+
+    public async Task<Result> DeleteAsync(string url, CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await _http.DeleteAsync(url, ct);
+            if (response.IsSuccessStatusCode) return Result.Ok();
+            var raw = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("CIOT API DELETE erro {Status} em {Url}: {Body}", (int)response.StatusCode, url, raw);
+            return Result.Fail($"CIOT API retornou {(int)response.StatusCode}: {raw}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha DELETE {Url}", url);
+            return Result.Fail($"Falha na chamada CIOT: {ex.Message}");
+        }
+    }
+
     private async Task<Result<T>> ParseResponseAsync<T>(
         HttpResponseMessage response, string url, CancellationToken ct)
     {
         if (response.IsSuccessStatusCode)
         {
+            // 204 NoContent ou Content-Length 0 → retorna default (T pode ser object)
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent ||
+                response.Content.Headers.ContentLength is 0)
+                return Result.Ok(default(T)!);
+
             var data = await response.Content.ReadFromJsonAsync<T>(_json, ct);
             return data is null
                 ? Result.Fail<T>("Resposta vazia da CIOT API.")

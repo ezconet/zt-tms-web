@@ -1,0 +1,116 @@
+@page "/ciot/veiculos"
+@rendermode InteractiveServer
+@using Zenatur.Tms.Application.Veiculos
+@using Zenatur.Tms.Web.Features.Ciot.Components
+@inject IVeiculoManagementService Service
+@inject IDialogService Dialog
+@inject ISnackbar Snackbar
+
+<PageTitle>Veículos</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 mb-5" />
+
+<MudCard Elevation="1" Style="border-radius:12px; overflow:hidden;">
+    <div class="zt-card-header">
+        <span style="display:flex; align-items:center; gap:8px;">
+            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" />
+            Veículos
+        </span>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.Add" OnClick="AbrirNovo"
+                   Style="border-color:rgba(0,0,0,0.2); color:#1f2937; font-size:12px;">
+            Novo Veículo
+        </MudButton>
+    </div>
+    <MudCardContent Class="pa-0">
+        <div class="pa-4" style="border-bottom:1px solid #F3F4F6;">
+            <MudTextField @bind-Value="_termo" @bind-Value:after="Filtrar"
+                          Placeholder="Buscar por placa, marca ou modelo..."
+                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="false" />
+        </div>
+
+        @if (_carregando)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (_lista.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="ma-4">Nenhum veículo cadastrado.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_lista" Dense="true" Hover="true" Elevation="0" RowStyle="font-size:13px;">
+                <HeaderContent>
+                    <MudTh>Placa</MudTh><MudTh>Tipo</MudTh><MudTh>Categoria</MudTh>
+                    <MudTh>Marca/Modelo</MudTh><MudTh>RNTRC</MudTh><MudTh Style="text-align:right;">Ações</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><strong style="font-family:monospace;">@context.Placa</strong></MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Label="true"
+                                 Style="@(context.TipoTracao == 1 ? "background:#EFF6FF;color:#1D4ED8;font-size:11px;" : "background:#FEF3C7;color:#92400E;font-size:11px;")">
+                            @(context.TipoTracao == 1 ? "Tracionante" : "Reboque")
+                        </MudChip>
+                    </MudTd>
+                    <MudTd>@context.CategoriaVeiculo</MudTd>
+                    <MudTd><MudText Typo="Typo.caption">@context.Marca @context.Modelo</MudText></MudTd>
+                    <MudTd><MudText Typo="Typo.caption" Style="font-family:monospace;">@context.Rntrc</MudText></MudTd>
+                    <MudTd Style="text-align:right;">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => AbrirEdicao(context)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => Remover(context)" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<VeiculoListItem> _lista = [];
+    private string _termo = "";
+    private bool _carregando;
+
+    private readonly List<BreadcrumbItem> _breadcrumbs =
+    [
+        new("Home", href: "/", icon: Icons.Material.Filled.Home),
+        new("CIOT", href: null, disabled: true),
+        new("Veículos", href: "/ciot/veiculos", disabled: false),
+    ];
+
+    protected override async Task OnInitializedAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        _carregando = true;
+        try { _lista = (await Service.ListarAsync(_termo)).ToList(); }
+        finally { _carregando = false; }
+    }
+
+    private Task Filtrar() => CarregarAsync();
+
+    private async Task AbrirNovo()
+    {
+        var d = await Dialog.ShowAsync<VeiculoForm>("Novo Veículo",
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        if (await d.Result is { Canceled: false }) await CarregarAsync();
+    }
+
+    private async Task AbrirEdicao(VeiculoListItem v)
+    {
+        var p = new DialogParameters { ["Original"] = v };
+        var d = await Dialog.ShowAsync<VeiculoForm>("Editar Veículo", p,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        if (await d.Result is { Canceled: false }) await CarregarAsync();
+    }
+
+    private async Task Remover(VeiculoListItem v)
+    {
+        var ok = await Dialog.ShowMessageBoxAsync("Confirmar", $"Remover veículo {v.Placa}?",
+            yesText: "Remover", cancelText: "Cancelar");
+        if (ok != true) return;
+        if (await Service.RemoverAsync(v.Placa)) { Snackbar.Add("Veículo removido.", Severity.Success); await CarregarAsync(); }
+        else Snackbar.Add("Falha ao remover (verifique se está em composição ativa).", Severity.Error);
+    }
+}

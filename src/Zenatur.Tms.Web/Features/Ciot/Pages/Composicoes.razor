@@ -1,0 +1,106 @@
+@page "/ciot/composicoes"
+@rendermode InteractiveServer
+@using Zenatur.Tms.Application.Composicoes
+@using Zenatur.Tms.Web.Features.Ciot.Components
+@inject IComposicaoManagementService Service
+@inject IDialogService Dialog
+@inject ISnackbar Snackbar
+
+<PageTitle>Composições</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 mb-5" />
+
+<MudCard Elevation="1" Style="border-radius:12px; overflow:hidden;">
+    <div class="zt-card-header">
+        <span style="display:flex; align-items:center; gap:8px;">
+            <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
+            Composições
+        </span>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.Add" OnClick="AbrirNovo"
+                   Style="border-color:rgba(0,0,0,0.2); color:#1f2937; font-size:12px;">
+            Nova Composição
+        </MudButton>
+    </div>
+    <MudCardContent Class="pa-0">
+        @if (_carregando)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (_lista.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="ma-4">Nenhuma composição cadastrada.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_lista" Dense="true" Hover="true" Elevation="0" RowStyle="font-size:13px;">
+                <HeaderContent>
+                    <MudTh>Nome</MudTh><MudTh>Tracionante</MudTh><MudTh>Reboques</MudTh>
+                    <MudTh Style="text-align:right;">Ações</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><strong>@context.Nome</strong></MudTd>
+                    <MudTd><MudText Typo="Typo.caption" Style="font-family:monospace;">@context.TracionantePlaca</MudText></MudTd>
+                    <MudTd>
+                        @foreach (var r in context.Reboques.OrderBy(x => x.Ordem))
+                        {
+                            <MudChip T="string" Size="Size.Small" Label="true"
+                                     Style="background:#FEF3C7;color:#92400E;font-size:11px;font-family:monospace;">
+                                @r.Ordem· @r.Placa
+                            </MudChip>
+                        }
+                    </MudTd>
+                    <MudTd Style="text-align:right;">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => AbrirEdicao(context)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => Remover(context)" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<ComposicaoListItem> _lista = [];
+    private bool _carregando;
+
+    private readonly List<BreadcrumbItem> _breadcrumbs =
+    [
+        new("Home", href: "/", icon: Icons.Material.Filled.Home),
+        new("CIOT", href: null, disabled: true),
+        new("Composições", href: "/ciot/composicoes", disabled: false),
+    ];
+
+    protected override async Task OnInitializedAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        _carregando = true;
+        try { _lista = (await Service.ListarAsync()).ToList(); }
+        finally { _carregando = false; }
+    }
+
+    private async Task AbrirNovo()
+    {
+        var d = await Dialog.ShowAsync<ComposicaoForm>("Nova Composição",
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        if (await d.Result is { Canceled: false }) await CarregarAsync();
+    }
+
+    private async Task AbrirEdicao(ComposicaoListItem c)
+    {
+        var p = new DialogParameters { ["Original"] = c };
+        var d = await Dialog.ShowAsync<ComposicaoForm>("Editar Composição", p,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        if (await d.Result is { Canceled: false }) await CarregarAsync();
+    }
+
+    private async Task Remover(ComposicaoListItem c)
+    {
+        var ok = await Dialog.ShowMessageBoxAsync("Confirmar", $"Remover composição {c.Nome}?",
+            yesText: "Remover", cancelText: "Cancelar");
+        if (ok != true) return;
+        if (await Service.RemoverAsync(c.Id)) { Snackbar.Add("Composição removida.", Severity.Success); await CarregarAsync(); }
+        else Snackbar.Add("Falha ao remover.", Severity.Error);
+    }
+}

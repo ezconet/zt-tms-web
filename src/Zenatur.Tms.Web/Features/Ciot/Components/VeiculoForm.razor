@@ -1,0 +1,102 @@
+@using Zenatur.Tms.Application.Veiculos
+@inject IVeiculoManagementService Service
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(IsEdicao ? Icons.Material.Filled.Edit : Icons.Material.Filled.LocalShipping)" />
+            <MudText Typo="Typo.h6">@(IsEdicao ? "Editar Veículo" : "Novo Veículo")</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_form.Placa" Label="Placa" Variant="Variant.Outlined"
+                              Disabled="IsEdicao" Required="true" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect T="int" @bind-Value="_form.TipoTracao" Label="Tipo de Tração" Variant="Variant.Outlined">
+                    <MudSelectItem Value="1">Tracionante (cavalo/truck)</MudSelectItem>
+                    <MudSelectItem Value="2">Reboque (carreta/semi)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_form.CategoriaVeiculo" Label="Categoria Pamcard" Variant="Variant.Outlined"
+                              HelperText="Código CategoriaVeiculo SEFAZ" Required="true" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_form.Renavam" Label="Renavam" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudNumericField T="int?" @bind-Value="_form.Eixos" Label="Eixos" Variant="Variant.Outlined" Min="1" Max="10" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudNumericField T="int?" @bind-Value="_form.AnoFabricacao" Label="Ano Fabricação" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudNumericField T="int?" @bind-Value="_form.AnoModelo" Label="Ano Modelo" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_form.Marca" Label="Marca" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_form.Modelo" Label="Modelo" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudNumericField T="decimal?" @bind-Value="_form.Tara" Label="Tara (kg)" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudNumericField T="decimal?" @bind-Value="_form.CapacidadeKg" Label="Capacidade (kg)" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_form.Rntrc" Label="RNTRC" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_form.ProprietarioFavorecidoDocumento" Label="Doc. Proprietário" Variant="Variant.Outlined"
+                              HelperText="CPF/CNPJ favorecido (opcional)" />
+            </MudItem>
+            @if (_erro is not null)
+            {
+                <MudItem xs="12"><MudAlert Severity="Severity.Error" Dense="true">@_erro</MudAlert></MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancelar">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
+                   OnClick="Salvar" Disabled="_salvando">@(IsEdicao ? "Atualizar" : "Cadastrar")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public VeiculoListItem? Original { get; set; }
+
+    private bool IsEdicao => Original is not null;
+    private VeiculoListItem _form = new();
+    private string? _erro;
+    private bool _salvando;
+
+    protected override void OnInitialized()
+        => _form = Original?.Clone() ?? new VeiculoListItem { TipoTracao = 1 };
+
+    private async Task Salvar()
+    {
+        _erro = null;
+        if (string.IsNullOrWhiteSpace(_form.Placa)) { _erro = "Placa obrigatória."; return; }
+        if (string.IsNullOrWhiteSpace(_form.CategoriaVeiculo)) { _erro = "Categoria obrigatória."; return; }
+        _form.Placa = _form.Placa.ToUpperInvariant().Replace("-", "");
+        _salvando = true;
+        try
+        {
+            await Service.SalvarAsync(_form);
+            Snackbar.Add($"Veículo {(IsEdicao ? "atualizado" : "cadastrado")}.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(_form));
+        }
+        catch (Exception ex) { _erro = ex.Message; }
+        finally { _salvando = false; }
+    }
+
+    private void Cancelar() => MudDialog.Cancel();
+}

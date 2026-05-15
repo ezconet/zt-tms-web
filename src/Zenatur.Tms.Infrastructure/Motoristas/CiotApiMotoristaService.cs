@@ -1,0 +1,108 @@
+using Microsoft.Extensions.Logging;
+using Zenatur.Tms.Application.Motoristas;
+using Zenatur.Tms.Infrastructure.Ciot;
+
+namespace Zenatur.Tms.Infrastructure.Motoristas;
+
+internal sealed class CiotApiMotoristaService : IMotoristaManagementService
+{
+    private readonly CiotApiHttpClient _http;
+    private readonly ILogger<CiotApiMotoristaService> _logger;
+    private const string ContratanteCnpj = "53717120000170";
+
+    public CiotApiMotoristaService(CiotApiHttpClient http, ILogger<CiotApiMotoristaService> logger)
+    {
+        _http   = http;
+        _logger = logger;
+    }
+
+    public async Task<IReadOnlyList<MotoristaListItem>> ListarAsync(string? termo = null, CancellationToken ct = default)
+    {
+        var qs = $"?contratanteCnpj={ContratanteCnpj}&take=200";
+        if (!string.IsNullOrWhiteSpace(termo)) qs += $"&q={Uri.EscapeDataString(termo.Trim())}";
+
+        var r = await _http.GetAsync<List<MotoristaApiResponse>>($"/api/v1/motoristas/local{qs}", ct);
+        if (r.IsFailed)
+        {
+            _logger.LogWarning("Falha listar motoristas: {Err}", string.Join("; ", r.Errors.Select(e => e.Message)));
+            return [];
+        }
+        return r.Value.Select(Map).ToList();
+    }
+
+    public async Task<MotoristaListItem?> ObterAsync(string cpf, CancellationToken ct = default)
+    {
+        var r = await _http.GetAsync<MotoristaApiResponse>($"/api/v1/motoristas/local/{cpf}?contratanteCnpj={ContratanteCnpj}", ct);
+        return r.IsFailed ? null : Map(r.Value);
+    }
+
+    public async Task<MotoristaListItem> SalvarAsync(MotoristaListItem m, CancellationToken ct = default)
+    {
+        var existente = await ObterAsync(m.Cpf, ct);
+        var body = new
+        {
+            contratanteCnpj = ContratanteCnpj,
+            cpf             = m.Cpf,
+            nome            = m.Nome,
+            dataNascimento  = m.DataNascimento,
+            email           = m.Email,
+            telefoneDdd     = m.TelefoneDdd,
+            telefoneNumero  = m.TelefoneNumero,
+            rntrc           = m.Rntrc,
+            rntrcSituacao   = m.RntrcSituacao,
+            rntrcValidade   = m.RntrcValidade,
+            cnhNumero       = m.CnhNumero,
+            cnhCategoria    = m.CnhCategoria,
+            cnhValidade     = m.CnhValidade,
+        };
+
+        if (existente is null)
+        {
+            var r = await _http.PostAsync<object, int>("/api/v1/motoristas", body, ct);
+            if (r.IsFailed) throw new InvalidOperationException("Falha criar motorista: " + string.Join("; ", r.Errors.Select(e => e.Message)));
+        }
+        else
+        {
+            var r = await _http.PutAsync<object, object>($"/api/v1/motoristas/{m.Cpf}", body, ct);
+            if (r.IsFailed) throw new InvalidOperationException("Falha atualizar motorista: " + string.Join("; ", r.Errors.Select(e => e.Message)));
+        }
+
+        return await ObterAsync(m.Cpf, ct) ?? m;
+    }
+
+    private static MotoristaListItem Map(MotoristaApiResponse r) => new()
+    {
+        Id             = r.id,
+        Cpf            = r.cpf ?? "",
+        Nome           = r.nome ?? "",
+        DataNascimento = r.dataNascimento,
+        Email          = r.email,
+        Rntrc          = r.rntrc,
+        RntrcSituacao  = r.rntrcSituacao,
+        RntrcValidade  = r.rntrcValidade,
+        TelefoneDdd    = r.telefoneDdd,
+        TelefoneNumero = r.telefoneNumero,
+        CnhNumero      = r.cnhNumero,
+        CnhCategoria   = r.cnhCategoria,
+        CnhValidade    = r.cnhValidade,
+        Ativo          = r.ativo,
+        AtualizadoEm   = r.atualizadoEm,
+    };
+
+    private sealed record MotoristaApiResponse(
+        int       id,
+        string?   cpf,
+        string?   nome,
+        DateOnly? dataNascimento,
+        string?   email,
+        string?   rntrc,
+        string?   rntrcSituacao,
+        DateOnly? rntrcValidade,
+        string?   telefoneDdd,
+        string?   telefoneNumero,
+        string?   cnhNumero,
+        string?   cnhCategoria,
+        DateOnly? cnhValidade,
+        bool      ativo,
+        DateTime  atualizadoEm);
+}

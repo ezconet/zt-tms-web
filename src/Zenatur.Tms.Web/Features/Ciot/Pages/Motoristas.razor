@@ -1,0 +1,101 @@
+@page "/ciot/motoristas"
+@rendermode InteractiveServer
+@using Zenatur.Tms.Application.Motoristas
+@using Zenatur.Tms.Web.Features.Ciot.Components
+@inject IMotoristaManagementService Service
+@inject IDialogService Dialog
+@inject ISnackbar Snackbar
+
+<PageTitle>Motoristas</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 mb-5" />
+
+<MudCard Elevation="1" Style="border-radius:12px; overflow:hidden;">
+    <div class="zt-card-header">
+        <span style="display:flex; align-items:center; gap:8px;">
+            <MudIcon Icon="@Icons.Material.Filled.Badge" Size="Size.Small" />
+            Motoristas
+        </span>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="AbrirNovo"
+                   Style="border-color:rgba(0,0,0,0.2); color:#1f2937; font-size:12px;">
+            Novo Motorista
+        </MudButton>
+    </div>
+    <MudCardContent Class="pa-0">
+        <div class="pa-4" style="border-bottom:1px solid #F3F4F6;">
+            <MudTextField @bind-Value="_termo" @bind-Value:after="Filtrar"
+                          Placeholder="Buscar por nome, CPF ou RNTRC..."
+                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="false" />
+        </div>
+
+        @if (_carregando)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (_lista.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="ma-4">Nenhum motorista cadastrado.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_lista" Dense="true" Hover="true" Elevation="0" RowStyle="font-size:13px;">
+                <HeaderContent>
+                    <MudTh>Nome</MudTh><MudTh>CPF</MudTh><MudTh>RNTRC</MudTh>
+                    <MudTh>CNH</MudTh><MudTh>Contato</MudTh><MudTh Style="text-align:right;">Ações</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><strong>@context.Nome</strong></MudTd>
+                    <MudTd><MudText Typo="Typo.caption" Style="font-family:monospace;">@context.Cpf</MudText></MudTd>
+                    <MudTd><MudText Typo="Typo.caption" Style="font-family:monospace;">@context.Rntrc</MudText></MudTd>
+                    <MudTd><MudText Typo="Typo.caption">@context.CnhNumero @(string.IsNullOrEmpty(context.CnhCategoria) ? "" : $"({context.CnhCategoria})")</MudText></MudTd>
+                    <MudTd><MudText Typo="Typo.caption" Style="color:#6B7280;">(@context.TelefoneDdd) @context.TelefoneNumero</MudText></MudTd>
+                    <MudTd Style="text-align:right;">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => AbrirEdicao(context)" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<MotoristaListItem> _lista = [];
+    private string _termo = "";
+    private bool _carregando;
+
+    private readonly List<BreadcrumbItem> _breadcrumbs =
+    [
+        new("Home", href: "/", icon: Icons.Material.Filled.Home),
+        new("CIOT", href: null, disabled: true),
+        new("Motoristas", href: "/ciot/motoristas", disabled: false),
+    ];
+
+    protected override async Task OnInitializedAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        _carregando = true;
+        try { _lista = (await Service.ListarAsync(_termo)).ToList(); }
+        finally { _carregando = false; }
+    }
+
+    private Task Filtrar() => CarregarAsync();
+
+    private async Task AbrirNovo()
+    {
+        var d = await Dialog.ShowAsync<MotoristaForm>("Novo Motorista",
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        if (await d.Result is { Canceled: false }) await CarregarAsync();
+    }
+
+    private async Task AbrirEdicao(MotoristaListItem m)
+    {
+        var p = new DialogParameters { ["Original"] = m };
+        var d = await Dialog.ShowAsync<MotoristaForm>("Editar Motorista", p,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        if (await d.Result is { Canceled: false }) await CarregarAsync();
+    }
+}

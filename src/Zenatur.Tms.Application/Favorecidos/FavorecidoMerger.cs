@@ -23,11 +23,12 @@ public static class FavorecidoMerger
         // Nome: Bridge prioritário (sistema operacional Zenatur), fallback CIOT
         var nome = Preferir(bridge?.Nome, ciot?.Nome);
 
-        // RNTRC: Bridge tem dado mais atualizado (ANTT direto), fallback CIOT
-        var rntrc         = Preferir(bridge?.Rntrc?.Numero, ciot?.RntrcCadastro);
-        var rntrcSituacao = bridge?.Rntrc?.Ativo == true ? "Ativo"
-                          : bridge?.Rntrc?.Ativo == false ? "Inativo"
-                          : ciot?.RntrcSituacao ?? "";
+        // RNTRC: número agora só vem da CIOT (Bridge removeu o objeto rntrc do payload).
+        var rntrc = ciot?.RntrcCadastro ?? string.Empty;
+
+        // Situação RNTRC: Bridge → AnttValidade futura == Ativo; sentinela 1900-01-01 == Inativo.
+        // Fallback CIOT.StatusRntrc se Bridge ausente.
+        var rntrcSituacao = DeriveRntrcSituacao(bridge?.AnttValidade) ?? ciot?.RntrcSituacao ?? "";
 
         // Meios pagamento: CIOT é fonte de verdade (Bridge legado não tem essa info)
         var meios = MapearMeiosCiot(ciot);
@@ -36,14 +37,29 @@ public static class FavorecidoMerger
 
         return new FavorecidoDto
         {
-            Documento      = documento,
-            Nome           = nome,
-            Rntrc          = rntrc,
-            RntrcSituacao  = rntrcSituacao,
-            TelefoneDdd    = ddd,
-            TelefoneNumero = numero,
-            MeiosPagamento = meios,
+            Documento          = documento,
+            Nome               = nome,
+            Rntrc              = rntrc,
+            RntrcSituacao      = rntrcSituacao,
+            TelefoneDdd        = ddd,
+            TelefoneNumero     = numero,
+            DataNascimento     = bridge?.DataNascimento,
+            EnderecoLogradouro = bridge?.Endereco?.Logradouro,
+            EnderecoNumero     = bridge?.Endereco?.Numero,
+            EnderecoBairro     = bridge?.Endereco?.Bairro,
+            EnderecoCidadeIbge = null, // Bridge não envia mais; resolução IBGE via lookup local quando necessário
+            EnderecoUf         = bridge?.Endereco?.Uf,
+            EnderecoCep        = bridge?.Endereco?.Cep,
+            MeiosPagamento     = meios,
         };
+    }
+
+    private static string? DeriveRntrcSituacao(DateOnly? anttValidade)
+    {
+        if (anttValidade is null) return null;
+        // Sentinela legado: "1900-01-01" = sem RNTRC válido
+        if (anttValidade.Value.Year < 1950) return "Inativo";
+        return anttValidade.Value >= DateOnly.FromDateTime(DateTime.Today) ? "Ativo" : "Inativo";
     }
 
     /// <summary>

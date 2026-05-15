@@ -62,13 +62,69 @@
             <MudItem xs="6" md="2">
                 <MudTextField @bind-Value="_form.TelefoneDdd"
                               Label="DDD"
-                              Variant="Variant.Outlined" />
+                              Variant="Variant.Outlined"
+                              Required="true" />
             </MudItem>
 
             <MudItem xs="6" md="4">
                 <MudTextField @bind-Value="_form.TelefoneNumero"
                               Label="Telefone"
+                              Variant="Variant.Outlined"
+                              Required="true" />
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudDatePicker @bind-Date="_dataNascimento"
+                               Label="Data de Nascimento"
+                               Variant="Variant.Outlined"
+                               DateFormat="dd/MM/yyyy"
+                               MaxDate="DateTime.Today"
+                               Required="true" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider Class="my-2" />
+                <MudText Typo="Typo.overline" Style="color:#6B7280; font-size:10px; letter-spacing:1px;">
+                    ENDEREÇO
+                </MudText>
+            </MudItem>
+
+            <MudItem xs="12" md="8">
+                <MudTextField @bind-Value="_form.EnderecoLogradouro"
+                              Label="Logradouro"
                               Variant="Variant.Outlined" />
+            </MudItem>
+
+            <MudItem xs="6" md="2">
+                <MudTextField @bind-Value="_form.EnderecoNumero"
+                              Label="Número"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+
+            <MudItem xs="6" md="2">
+                <MudTextField @bind-Value="_form.EnderecoCep"
+                              Label="CEP"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+
+            <MudItem xs="12" md="5">
+                <MudTextField @bind-Value="_form.EnderecoBairro"
+                              Label="Bairro"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+
+            <MudItem xs="8" md="5">
+                <MudTextField @bind-Value="_form.EnderecoCidadeIbge"
+                              Label="Código IBGE Cidade"
+                              Variant="Variant.Outlined"
+                              HelperText="7 dígitos" />
+            </MudItem>
+
+            <MudItem xs="4" md="2">
+                <MudTextField @bind-Value="_form.EnderecoUf"
+                              Label="UF"
+                              Variant="Variant.Outlined"
+                              MaxLength="2" />
             </MudItem>
 
             <MudItem xs="12">
@@ -167,6 +223,7 @@
 
     private FavorecidoListItem _form  = new();
     private string             _documento = string.Empty;
+    private DateTime?          _dataNascimento;
     private string?            _erro;
     private bool               _salvando;
 
@@ -187,6 +244,7 @@
             };
             _documento = DocumentoPreenchido ?? string.Empty;
         }
+        if (_form.DataNascimento is DateOnly dn) _dataNascimento = dn.ToDateTime(TimeOnly.MinValue);
     }
 
     private void AdicionarConta()
@@ -207,6 +265,12 @@
         { _erro = "Nome é obrigatório."; return; }
         if (string.IsNullOrWhiteSpace(_form.Rntrc))
         { _erro = "RNTRC é obrigatório."; return; }
+        if (string.IsNullOrWhiteSpace(_form.TelefoneDdd) || string.IsNullOrWhiteSpace(_form.TelefoneNumero))
+        { _erro = "Telefone é obrigatório."; return; }
+        if (_dataNascimento is null)
+        { _erro = "Data de Nascimento é obrigatória."; return; }
+
+        _form.DataNascimento = DateOnly.FromDateTime(_dataNascimento.Value);
 
         _salvando = true;
         try

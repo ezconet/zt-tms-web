@@ -153,6 +153,27 @@
                                 </MudItem>
                             }
 
+                            @if (_camposFavorecidoFaltantes is { Count: > 0 })
+                            {
+                                <MudItem xs="12">
+                                    <MudAlert Severity="Severity.Warning" Dense="false" Icon="@Icons.Material.Filled.Warning">
+                                        <MudText Typo="Typo.body2">
+                                            <strong>Campos obrigatórios faltando:</strong> @string.Join(", ", _camposFavorecidoFaltantes)
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Style="color:#6B7280;">
+                                            Esses campos são exigidos pela Pamcard. Edite o favorecido antes de emitir.
+                                        </MudText>
+                                        <div style="margin-top:8px;">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.Edit"
+                                                       OnClick="AbrirEdicaoFavorecido">
+                                                Editar Favorecido
+                                            </MudButton>
+                                        </div>
+                                    </MudAlert>
+                                </MudItem>
+                            }
+
                             @if (_veiculosBridge.Count > 0)
                             {
                                 <MudItem xs="12">
@@ -334,7 +355,81 @@
         </MudGrid>
     </MudStep>
 
-    @* ── FASE 3: Valores e Parcelas ── *@
+    @* ── FASE 3: Viagem (Data Partida + Documentos) ── *@
+    <MudStep Title="Viagem" HasError="@(_erroFase3viagem is not null)">
+        <MudGrid Spacing="3" Class="mt-2">
+
+            <MudItem xs="12" md="4">
+                <MudDatePicker @bind-Date="_vm.DataPartida"
+                               Label="Data da Partida"
+                               Variant="Variant.Outlined"
+                               DateFormat="dd/MM/yyyy"
+                               MinDate="DateTime.Today.AddDays(-30)"
+                               MaxDate="DateTime.Today.AddYears(1)"
+                               Required="true" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider Class="my-1" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudText Typo="Typo.overline" Style="color:#6B7280; font-size:10px; letter-spacing:1px;">
+                        DOCUMENTOS DA VIAGEM
+                    </MudText>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="AdicionarDocumentoViagem">
+                        Adicionar Documento
+                    </MudButton>
+                </MudStack>
+            </MudItem>
+
+            @for (int i = 0; i < _vm.DocumentosViagem.Count; i++)
+            {
+                var idx = i;
+                var doc = _vm.DocumentosViagem[idx];
+                <MudItem xs="12" md="5">
+                    <MudSelect T="int" @bind-Value="doc.Tipo"
+                               Label="Tipo" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="1">Manifesto</MudSelectItem>
+                        <MudSelectItem Value="2">Romaneio</MudSelectItem>
+                        <MudSelectItem Value="3">Plano de Viagem</MudSelectItem>
+                        <MudSelectItem Value="5">Conhecimento (CT-e)</MudSelectItem>
+                        <MudSelectItem Value="6">Nota Fiscal (NF-e)</MudSelectItem>
+                        <MudSelectItem Value="7">Documento do Cliente</MudSelectItem>
+                        <MudSelectItem Value="8">Pedido</MudSelectItem>
+                        <MudSelectItem Value="11">Ordem de Coleta</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="10" md="6">
+                    <MudTextField @bind-Value="doc.Numero"
+                                  Label="Número" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Required="true" />
+                </MudItem>
+                <MudItem xs="2" md="1" Class="d-flex align-center">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error" Size="Size.Small"
+                                   OnClick="@(() => _vm.DocumentosViagem.RemoveAt(idx))" />
+                </MudItem>
+            }
+            @if (_vm.DocumentosViagem.Count == 0)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        Adicione ao menos 1 documento (NF-e, CT-e, manifesto, etc) antes da emissão.
+                    </MudAlert>
+                </MudItem>
+            }
+
+            @if (_erroFase3viagem is not null)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Error" Dense="true">@_erroFase3viagem</MudAlert>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudStep>
+
+    @* ── FASE 4: Valores e Parcelas ── *@
     <MudStep Title="Valores">
         <MudGrid Spacing="3" Class="mt-2">
 
@@ -423,57 +518,6 @@
                     </MudStack>
                 </MudPaper>
             </MudItem>
-
-            <MudItem xs="12">
-                <MudDivider Class="my-1" />
-                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                    <MudText Typo="Typo.overline" Style="color:#6B7280; font-size:10px; letter-spacing:1px;">
-                        DOCUMENTOS DA VIAGEM
-                    </MudText>
-                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.Add"
-                               OnClick="AdicionarDocumentoViagem">
-                        Adicionar Documento
-                    </MudButton>
-                </MudStack>
-            </MudItem>
-
-            @for (int i = 0; i < _vm.DocumentosViagem.Count; i++)
-            {
-                var idx = i;
-                var doc = _vm.DocumentosViagem[idx];
-                <MudItem xs="12" md="5">
-                    <MudSelect T="int" @bind-Value="doc.Tipo"
-                               Label="Tipo" Variant="Variant.Outlined" Margin="Margin.Dense">
-                        <MudSelectItem Value="1">Manifesto</MudSelectItem>
-                        <MudSelectItem Value="2">Romaneio</MudSelectItem>
-                        <MudSelectItem Value="3">Plano de Viagem</MudSelectItem>
-                        <MudSelectItem Value="5">Conhecimento (CT-e)</MudSelectItem>
-                        <MudSelectItem Value="6">Nota Fiscal (NF-e)</MudSelectItem>
-                        <MudSelectItem Value="7">Documento do Cliente</MudSelectItem>
-                        <MudSelectItem Value="8">Pedido</MudSelectItem>
-                        <MudSelectItem Value="11">Ordem de Coleta</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="10" md="6">
-                    <MudTextField @bind-Value="doc.Numero"
-                                  Label="Número" Variant="Variant.Outlined" Margin="Margin.Dense"
-                                  Required="true" />
-                </MudItem>
-                <MudItem xs="2" md="1" Class="d-flex align-center">
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                   Color="Color.Error" Size="Size.Small"
-                                   OnClick="@(() => _vm.DocumentosViagem.RemoveAt(idx))" />
-                </MudItem>
-            }
-            @if (_vm.DocumentosViagem.Count == 0)
-            {
-                <MudItem xs="12">
-                    <MudAlert Severity="Severity.Info" Dense="true">
-                        Adicione ao menos 1 documento (NF-e, CT-e, manifesto, etc) antes da emissão.
-                    </MudAlert>
-                </MudItem>
-            }
 
             <MudItem xs="12">
                 <MudDivider Class="my-1" />
@@ -577,6 +621,15 @@
                         @ReviewRow("Placa",     _vm.VeiculoPlaca, Mono: true)
                         @ReviewRow("Carga",     $"{_tiposCarga.FirstOrDefault(c => c.Codigo == _vm.TipoCarga)?.Descricao} ({_vm.UnidadeMedida})")
                         @ReviewRow("Rota",      $"{_vm.OrigemDescricao} → {_vm.DestinoDescricao}")
+                        @if (_vm.DocumentosViagem.Count > 0)
+                        {
+                            <MudDivider Class="my-2" />
+                            <MudText Typo="Typo.overline" Style="color:#9CA3AF; font-size:10px; letter-spacing:1px;">DOCUMENTOS DA VIAGEM</MudText>
+                            @foreach (var d in _vm.DocumentosViagem)
+                            {
+                                @ReviewRow(DescricaoTipoDocViagem(d.Tipo), d.Numero, Mono: true)
+                            }
+                        }
                     </MudPaper>
                 </MudItem>
 
@@ -698,6 +751,7 @@
     private bool _emitindo;
     private string? _erroFase1;
     private string? _erroFase2;
+    private string? _erroFase3viagem;
     private string? _erroFase3;
     private string? _erroFase4;
     private string? _protocoloEmitido;
@@ -981,8 +1035,21 @@
             await CalcularRotaEFreteMinimoAsync();
             State.AvancarFase();
         }
-        // ── Fase 3 → 4 ──
+        // ── Fase 3 (Viagem) → 4 (Valores) ──
         else if (saindoDe == 2)
+        {
+            _erroFase3viagem = null;
+
+            if (_vm.DataPartida is null)
+            { _erroFase3viagem = "Informe a data de partida."; args.Cancel = true; return; }
+
+            if (_vm.DocumentosViagem.Count == 0 || _vm.DocumentosViagem.Any(d => string.IsNullOrWhiteSpace(d.Numero)))
+            { _erroFase3viagem = "Adicione ao menos 1 documento de viagem com número válido."; args.Cancel = true; return; }
+
+            State.AvancarFase();
+        }
+        // ── Fase 4 (Valores) → 5 (Revisão) ──
+        else if (saindoDe == 3)
         {
             _erroFase3 = null;
 
@@ -995,7 +1062,6 @@
             if (string.IsNullOrEmpty(_vm.MeioPagamento))
             { _erroFase3 = "Selecione o Meio de Pagamento."; args.Cancel = true; return; }
 
-            // valida que o meio de pagamento pertence ao favorecido (Fail-Fast da spec)
             if (!_meiosFavorecido.Any(m => m.Identificador == _vm.MeioPagamento))
             { _erroFase3 = "Meio de pagamento selecionado não está vinculado ao favorecido."; args.Cancel = true; return; }
 
@@ -1004,9 +1070,6 @@
 
             if (_vm.Parcelas.Count == 0)
             { _erroFase3 = "Cronograma de parcelas inválido — revise os valores."; args.Cancel = true; return; }
-
-            if (_vm.DocumentosViagem.Count == 0 || _vm.DocumentosViagem.Any(d => string.IsNullOrWhiteSpace(d.Numero)))
-            { _erroFase3 = "Adicione ao menos 1 documento de viagem com número válido."; args.Cancel = true; return; }
 
             State.AvancarFase();
         }
@@ -1017,6 +1080,82 @@
     private void AdicionarDocumentoViagem()
     {
         _vm.DocumentosViagem.Add(new DocumentoViagemViewModel { Tipo = 6 });
+    }
+
+    private static string DescricaoTipoDocViagem(int tipo) => tipo switch
+    {
+        1  => "Manifesto",
+        2  => "Romaneio",
+        3  => "Plano de Viagem",
+        5  => "CT-e",
+        6  => "NF-e",
+        7  => "Doc. Cliente",
+        8  => "Pedido",
+        11 => "Ordem de Coleta",
+        _  => $"Tipo {tipo}",
+    };
+
+    private IReadOnlyList<string>? _camposFavorecidoFaltantes => _favorecido is null ? null : ChecarCamposFavorecido(_favorecido);
+
+    private static List<string> ChecarCamposFavorecido(FavorecidoDto f)
+    {
+        var faltam = new List<string>();
+        if (f.DataNascimento is null)            faltam.Add("Data de Nascimento");
+        if (string.IsNullOrWhiteSpace(f.TelefoneDdd) || string.IsNullOrWhiteSpace(f.TelefoneNumero))
+            faltam.Add("Telefone");
+        if (string.IsNullOrWhiteSpace(f.EnderecoLogradouro)) faltam.Add("Endereço (logradouro)");
+        if (string.IsNullOrWhiteSpace(f.EnderecoBairro))     faltam.Add("Bairro");
+        if (string.IsNullOrWhiteSpace(f.EnderecoUf))         faltam.Add("UF");
+        if (string.IsNullOrWhiteSpace(f.EnderecoCep))        faltam.Add("CEP");
+        return faltam;
+    }
+
+    private async Task AbrirEdicaoFavorecido()
+    {
+        if (_favorecido is null) return;
+        var docDigits = _favorecido.Documento;
+        var prefil = new FavorecidoListItem
+        {
+            Documento          = docDigits,
+            DocumentoTipo      = docDigits.Length == 11 ? 1 : 2,
+            Nome               = _favorecido.Nome,
+            Rntrc              = _favorecido.Rntrc,
+            RntrcSituacao      = _favorecido.RntrcSituacao,
+            TelefoneDdd        = _favorecido.TelefoneDdd,
+            TelefoneNumero     = _favorecido.TelefoneNumero,
+            DataNascimento     = _favorecido.DataNascimento,
+            EnderecoLogradouro = _favorecido.EnderecoLogradouro,
+            EnderecoNumero     = _favorecido.EnderecoNumero,
+            EnderecoBairro     = _favorecido.EnderecoBairro,
+            EnderecoCidadeIbge = _favorecido.EnderecoCidadeIbge,
+            EnderecoUf         = _favorecido.EnderecoUf,
+            EnderecoCep        = _favorecido.EnderecoCep,
+        };
+        var parameters = new DialogParameters { ["Original"] = prefil };
+        var dialog = await DialogService.ShowAsync<FavorecidoForm>("Editar Favorecido", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: FavorecidoListItem editado })
+        {
+            // atualiza o DTO em memória com os dados que o user preencheu
+            _favorecido = _favorecido with
+            {
+                Nome           = editado.Nome,
+                Rntrc          = editado.Rntrc,
+                RntrcSituacao  = editado.RntrcSituacao,
+                TelefoneDdd    = editado.TelefoneDdd,
+                TelefoneNumero = editado.TelefoneNumero,
+                DataNascimento = editado.DataNascimento,
+                EnderecoLogradouro = editado.EnderecoLogradouro,
+                EnderecoNumero     = editado.EnderecoNumero,
+                EnderecoBairro     = editado.EnderecoBairro,
+                EnderecoCidadeIbge = editado.EnderecoCidadeIbge,
+                EnderecoUf         = editado.EnderecoUf,
+                EnderecoCep        = editado.EnderecoCep,
+            };
+            _vm.FavorecidoNome = editado.Nome;
+            Snackbar.Add("Favorecido atualizado.", Severity.Success);
+        }
     }
 
     private async Task AbrirCadastroFavorecido()
@@ -1213,11 +1352,32 @@
 
         try
         {
-            var docTipo = (_vm.FavorecidoDocumento?.Length ?? 0) == 11 ? 1 : 2;
+            // Pamcard: 1=CNPJ, 2=CPF (mesma convenção do bug 1.13)
+            var docTipo = (_vm.FavorecidoDocumento?.Length ?? 0) == 11 ? 2 : 1;
+
+            // Sem fallbacks — favorecido deve estar completo (Bridge ou cadastro manual)
+            if (_favorecido?.DataNascimento is null)
+            {
+                _erroFase4 = "Data de nascimento do favorecido não informada. Edite o favorecido na Fase 1.";
+                _emitindo = false;
+                StateHasChanged();
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_favorecido.TelefoneDdd) || string.IsNullOrWhiteSpace(_favorecido.TelefoneNumero))
+            {
+                _erroFase4 = "Telefone do favorecido não informado. Edite o favorecido na Fase 1.";
+                _emitindo = false;
+                StateHasChanged();
+                return;
+            }
+
+            int? enderecoIbge = int.TryParse(_favorecido.EnderecoCidadeIbge, out var eIbge) ? eIbge : null;
+            int? enderecoNum  = int.TryParse(_favorecido.EnderecoNumero,     out var eNum)  ? eNum  : null;
 
             var request = new InsertTripRequest
             {
                 ContratanteCnpj = _vm.ContratanteCnpj ?? string.Empty,
+                DataPartida     = _vm.DataPartida?.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy"),
                 Favorecidos =
                 [
                     new FavorecidoItem
@@ -1232,8 +1392,15 @@
                                 Numero = _vm.FavorecidoDocumento ?? string.Empty,
                             }
                         ],
-                        TelefoneDdd    = _favorecido?.TelefoneDdd    ?? "11",
-                        TelefoneNumero = _favorecido?.TelefoneNumero ?? "999999999",
+                        DataNascimento     = _favorecido.DataNascimento.Value,
+                        TelefoneDdd        = _favorecido.TelefoneDdd,
+                        TelefoneNumero     = _favorecido.TelefoneNumero,
+                        EnderecoIbge       = enderecoIbge,
+                        EnderecoLogradouro = _favorecido.EnderecoLogradouro,
+                        EnderecoNumero     = enderecoNum,
+                        EnderecoBairro     = _favorecido.EnderecoBairro,
+                        EnderecoUf         = _favorecido.EnderecoUf,
+                        EnderecoCep        = _favorecido.EnderecoCep,
                     }
                 ],
                 VeiculoPlaca     = _vm.VeiculoPlaca?.Replace("-", ""),

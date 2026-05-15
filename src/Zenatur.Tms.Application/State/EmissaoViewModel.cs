@@ -36,6 +36,9 @@ public class EmissaoViewModel
     // Documentos da viagem (mínimo 1 obrigatório no Pamcard)
     public List<DocumentoViagemViewModel> DocumentosViagem { get; set; } = [];
 
+    // Fase Viagem
+    public DateTime? DataPartida { get; set; } = DateTime.Today;
+
     public decimal ValorLiquido => ValorFrete + ValorPedagio - ValorImpostos;
 
     // Resultado (pós-emissão)

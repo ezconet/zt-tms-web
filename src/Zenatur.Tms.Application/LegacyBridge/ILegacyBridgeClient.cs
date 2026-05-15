@@ -13,13 +13,13 @@ public interface ILegacyBridgeClient
 }
 
 public record MotoristaLegadoResponse(
-    string                              Cpf,
+    string                              Documento,
+    string                              TipoDocumento,
     string                              Nome,
     DateOnly?                           DataNascimento,
     string?                             Telefone,
     EnderecoLegado?                     Endereco,
     DateOnly?                           AnttValidade,
-    RntrcLegado?                        Rntrc,
     IReadOnlyList<VeiculoMotoristaItem>? Veiculos);
 
 public record EnderecoLegado(
@@ -27,11 +27,8 @@ public record EnderecoLegado(
     string?  Numero,
     string?  Complemento,
     string?  Bairro,
-    string?  CidadeIbge,
     string?  Uf,
     string?  Cep);
-
-public record RntrcLegado(string Numero, bool? Ativo, DateOnly? Validade);
 
 /// <summary>
 /// Veículo vinculado ao motorista (vem inline na resposta /motoristas/{doc}).

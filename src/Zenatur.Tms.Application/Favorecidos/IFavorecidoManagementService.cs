@@ -18,6 +18,13 @@ public class FavorecidoListItem
     public string? Email         { get; set; }
     public string? TelefoneDdd   { get; set; }
     public string? TelefoneNumero { get; set; }
+    public DateOnly? DataNascimento { get; set; }
+    public string?   EnderecoLogradouro { get; set; }
+    public string?   EnderecoNumero     { get; set; }
+    public string?   EnderecoBairro     { get; set; }
+    public string?   EnderecoCidadeIbge { get; set; }
+    public string?   EnderecoUf         { get; set; }
+    public string?   EnderecoCep        { get; set; }
     public DateTime CriadoEm     { get; set; } = DateTime.UtcNow;
 
     public List<ContaBancariaItem> Contas { get; set; } = [];
@@ -36,6 +43,13 @@ public class FavorecidoListItem
         Email          = Email,
         TelefoneDdd    = TelefoneDdd,
         TelefoneNumero = TelefoneNumero,
+        DataNascimento     = DataNascimento,
+        EnderecoLogradouro = EnderecoLogradouro,
+        EnderecoNumero     = EnderecoNumero,
+        EnderecoBairro     = EnderecoBairro,
+        EnderecoCidadeIbge = EnderecoCidadeIbge,
+        EnderecoUf         = EnderecoUf,
+        EnderecoCep        = EnderecoCep,
         CriadoEm       = CriadoEm,
         Contas         = Contas.Select(c => c.Clone()).ToList(),
     };
