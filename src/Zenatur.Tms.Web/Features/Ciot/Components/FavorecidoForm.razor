@@ -65,7 +65,26 @@
                 </MudSelect>
             </MudItem>
 
-            <MudItem xs="12" md="6">
+            @if (_form.DocumentoTipo == 1)
+            {
+                <MudItem xs="8" md="3">
+                    <MudTextField @bind-Value="_form.RgNumero"
+                                  Label="RG"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  HelperText="Obrigatório PF (Pamcard)" />
+                </MudItem>
+                <MudItem xs="4" md="2">
+                    <MudSelect T="string" @bind-Value="_form.RgUf" Label="UF RG" Variant="Variant.Outlined">
+                        @foreach (var uf in _ufs)
+                        {
+                            <MudSelectItem Value="@uf">@uf</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+
+            <MudItem xs="12" md="@(_form.DocumentoTipo == 1 ? 4 : 6)">
                 <MudTextField @bind-Value="_form.Email"
                               Label="E-mail"
                               Variant="Variant.Outlined"
@@ -358,6 +377,8 @@
         { _erro = "CEP é obrigatório (exigido pela Pamcard)."; return; }
         if (string.IsNullOrWhiteSpace(_form.EnderecoCidadeIbge))
         { _erro = "Selecione a Cidade."; return; }
+        if (_form.DocumentoTipo == 1 && string.IsNullOrWhiteSpace(_form.RgNumero))
+        { _erro = "RG é obrigatório para Pessoa Física (exigido pela Pamcard)."; return; }
 
         _form.DataNascimento = DateOnly.FromDateTime(_dataNascimento.Value);
 

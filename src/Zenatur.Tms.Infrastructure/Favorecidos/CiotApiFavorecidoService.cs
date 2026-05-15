@@ -56,10 +56,18 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
         if (existente is null)
         {
             // POST — cria via Pamcard InsertFavored + outbox Favorecido.Criado
+            // Documentos: CPF/CNPJ (Pamcard 2=CPF,1=CNPJ) + RG tipo 3 obrigatório p/ PF
+            var docs = new List<object>
+            {
+                new { tipo = favorecido.DocumentoTipo == 1 ? 2 : 1, numero = favorecido.Documento, uf = (string?)null }
+            };
+            if (favorecido.DocumentoTipo == 1 && !string.IsNullOrWhiteSpace(favorecido.RgNumero))
+                docs.Add(new { tipo = 3, numero = favorecido.RgNumero, uf = favorecido.RgUf });
+
             var insertBody = new
             {
                 contratanteCnpj  = ContratanteCnpj,
-                documentos       = new[] { new { tipo = favorecido.DocumentoTipo == 1 ? 2 : 1, numero = favorecido.Documento } }, // TMS 1=CPF, Pamcard 2=CPF
+                documentos       = docs,
                 nome             = favorecido.Nome,
                 dataNascimento   = favorecido.DataNascimento,
                 logradouro       = favorecido.EnderecoLogradouro,

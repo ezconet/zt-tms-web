@@ -16,6 +16,8 @@ public class FavorecidoListItem
     public string  Rntrc         { get; set; } = string.Empty;
     public string  RntrcSituacao { get; set; } = "Ativo";
     public string? Email         { get; set; }
+    public string? RgNumero      { get; set; }
+    public string? RgUf          { get; set; }
     public string? TelefoneDdd   { get; set; }
     public string? TelefoneNumero { get; set; }
     public DateOnly? DataNascimento { get; set; }
@@ -41,6 +43,8 @@ public class FavorecidoListItem
         Rntrc          = Rntrc,
         RntrcSituacao  = RntrcSituacao,
         Email          = Email,
+        RgNumero       = RgNumero,
+        RgUf           = RgUf,
         TelefoneDdd    = TelefoneDdd,
         TelefoneNumero = TelefoneNumero,
         DataNascimento     = DataNascimento,
