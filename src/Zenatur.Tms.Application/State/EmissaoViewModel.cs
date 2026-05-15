@@ -8,9 +8,15 @@ public class EmissaoViewModel
     public string? FavorecidoNome { get; set; }
     public string? FavorecidoRntrc { get; set; }
 
+    // Fase 1 — split PJ: quando favorecido é CNPJ, motorista (condutor PF) é obrigatório
+    public string? MotoristaCpf  { get; set; }
+    public string? MotoristaNome { get; set; }
+    public bool FavorecidoEhPj => (FavorecidoDocumento?.Length ?? 0) == 14;
+
     // Fase 2 — Logística e Veículo
     public string? TipoVeiculo { get; set; }
     public string? VeiculoPlaca { get; set; }
+    public List<string> ReboquesPlacas { get; set; } = [];
     public string? TipoCarga { get; set; }
     public string? UnidadeMedida { get; set; }
     public string? OrigemIbge { get; set; }

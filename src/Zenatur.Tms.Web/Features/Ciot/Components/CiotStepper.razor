@@ -3,13 +3,18 @@
 @using Zenatur.Ciot.Client.Roteirizacao
 @using Zenatur.Ciot.Client.Shared
 @using Zenatur.Ciot.Client.Viagem
+@using Zenatur.Tms.Application.Composicoes
 @using Zenatur.Tms.Application.Domain
 @using Zenatur.Tms.Application.Favorecidos
 @using Zenatur.Tms.Application.LegacyBridge
+@using Zenatur.Tms.Application.Motoristas
 @using Zenatur.Tms.Application.State
+@using Zenatur.Tms.Web.Features.Ciot.Components
 @inject ICiotClient CiotClient
 @inject ILegacyBridgeClient Bridge
 @inject IDomainService DomainService
+@inject IMotoristaManagementService MotoristaService
+@inject IComposicaoManagementService ComposicaoService
 @inject CiotStateContainer State
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -107,6 +112,37 @@
                                 <MudText Typo="Typo.caption" Style="color:#6B7280;">RNTRC</MudText>
                                 <MudText Typo="Typo.body1" Style="font-family:monospace;">@fav.Rntrc</MudText>
                             </MudItem>
+
+                            @if (fav.Documento.Length == 14)
+                            {
+                                <MudItem xs="12">
+                                    <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.Person">
+                                        Favorecido é Pessoa Jurídica — informe o motorista (condutor PF) que vai conduzir a viagem.
+                                    </MudAlert>
+                                </MudItem>
+                                <MudItem xs="12" md="5">
+                                    <MudTextField @bind-Value="_vm.MotoristaCpf"
+                                                  Label="CPF do Motorista"
+                                                  Variant="Variant.Outlined"
+                                                  Placeholder="11 dígitos"
+                                                  Immediate="true"
+                                                  Required="true"
+                                                  Adornment="Adornment.End"
+                                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                                  OnAdornmentClick="BuscarMotoristaPj" />
+                                </MudItem>
+                                <MudItem xs="12" md="5">
+                                    <MudTextField @bind-Value="_vm.MotoristaNome"
+                                                  Label="Nome do Motorista"
+                                                  Variant="Variant.Outlined"
+                                                  Required="true" />
+                                </MudItem>
+                                <MudItem xs="12" md="2" Class="d-flex align-center">
+                                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.PersonAdd"
+                                               OnClick="AbrirCadastroMotorista">Cadastrar</MudButton>
+                                </MudItem>
+                            }
 
                             @if (fav.MeiosPagamento is { Count: > 0 } meios)
                             {
@@ -243,15 +279,47 @@
                 }
             </MudItem>
 
+            <MudItem xs="12">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAutocomplete T="ComposicaoListItem"
+                                     Value="_composicaoSelecionada"
+                                     ValueChanged="OnComposicaoSelecionada"
+                                     SearchFunc="BuscarComposicoes"
+                                     ToStringFunc="@(c => c is null ? string.Empty : $"{c.Nome} — {c.TracionantePlaca}" + (c.Reboques.Count > 0 ? $" +{c.Reboques.Count} reb." : ""))"
+                                     Label="Composição cadastrada (opcional)"
+                                     Variant="Variant.Outlined"
+                                     Clearable="true"
+                                     MinCharacters="0"
+                                     DebounceInterval="200"
+                                     HelperText="Selecione composição salva para auto-preencher cavalo + reboques"
+                                     Style="flex:1;" />
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="AbrirNovaComposicao">Nova</MudButton>
+                </MudStack>
+            </MudItem>
+
             <MudItem xs="12" md="6">
                 <MudTextField @bind-Value="_vm.VeiculoPlaca" @bind-Value:after="OnPlacaChanged"
                               Label="Placa do Veículo (Cavalo)"
                               Variant="Variant.Outlined"
                               Placeholder="ABC1D23 ou ABC-1D23"
-                              HelperText="Mercosul — 7 caracteres alfanuméricos"
+                              HelperText="Mercosul — ou selecione composição acima"
                               Immediate="true"
                               Required="true" />
             </MudItem>
+
+            @if (_vm.ReboquesPlacas.Count > 0)
+            {
+                <MudItem xs="12" md="6" Class="d-flex align-center">
+                    <MudText Typo="Typo.caption" Style="color:#6B7280;">Reboques:&nbsp;</MudText>
+                    @foreach (var rp in _vm.ReboquesPlacas)
+                    {
+                        <MudChip T="string" Size="Size.Small" Label="true"
+                                 Style="background:#FEF3C7;color:#92400E;font-size:11px;font-family:monospace;">@rp</MudChip>
+                    }
+                </MudItem>
+            }
 
             <MudItem xs="12" md="6">
                 <MudSelect T="string" @bind-Value="_vm.TipoCarga" @bind-Value:after="OnTipoCargaChanged"
@@ -996,6 +1064,16 @@
                 args.Cancel = true;
                 return;
             }
+            if (_favorecido.Documento.Length == 14)
+            {
+                var cpfMot = new string((_vm.MotoristaCpf ?? "").Where(char.IsDigit).ToArray());
+                if (cpfMot.Length != 11 || string.IsNullOrWhiteSpace(_vm.MotoristaNome))
+                {
+                    Snackbar.Add("Favorecido PJ — informe CPF e nome do motorista condutor.", Severity.Warning);
+                    args.Cancel = true;
+                    return;
+                }
+            }
             if (!_favorecido.RntrcAtivo)
             {
                 if (!Env.IsDevelopment())
@@ -1155,6 +1233,116 @@
             };
             _vm.FavorecidoNome = editado.Nome;
             Snackbar.Add("Favorecido atualizado.", Severity.Success);
+        }
+    }
+
+    private ComposicaoListItem? _composicaoSelecionada;
+
+    private async Task<IEnumerable<ComposicaoListItem>> BuscarComposicoes(string? termo, CancellationToken ct)
+    {
+        var lista = await ComposicaoService.ListarAsync();
+        if (string.IsNullOrWhiteSpace(termo)) return lista;
+        var t = termo.Trim();
+        return lista.Where(c =>
+            c.Nome.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+            c.TracionantePlaca.Contains(t, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void OnComposicaoSelecionada(ComposicaoListItem? c)
+    {
+        _composicaoSelecionada = c;
+        if (c is null)
+        {
+            _vm.ReboquesPlacas = [];
+            return;
+        }
+        _vm.VeiculoPlaca   = c.TracionantePlaca;
+        _vm.ReboquesPlacas = c.Reboques.OrderBy(r => r.Ordem).Select(r => r.Placa).ToList();
+        Snackbar.Add($"Composição '{c.Nome}' aplicada: cavalo {c.TracionantePlaca} + {c.Reboques.Count} reboque(s).", Severity.Success);
+    }
+
+    private async Task AbrirNovaComposicao()
+    {
+        var dialog = await DialogService.ShowAsync<ComposicaoForm>("Nova Composição",
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ComposicaoListItem nova })
+        {
+            OnComposicaoSelecionada(nova);
+        }
+    }
+
+    // Monta lista favorecidos do InsertTrip. PF puro → 1 favorecido.
+    // PJ → favorecido1 (CNPJ titular) com responsável-consumo = motorista (spec 05).
+    private List<FavorecidoItem> MontarFavorecidos(int docTipo, int? enderecoIbge, int? enderecoNum)
+    {
+        var titular = new FavorecidoItem
+        {
+            Tipo = docTipo,
+            Nome = _vm.FavorecidoNome ?? string.Empty,
+            Documentos =
+            [
+                new DocumentoFavorecidoItem { Tipo = docTipo, Numero = _vm.FavorecidoDocumento ?? string.Empty }
+            ],
+            DataNascimento     = _favorecido!.DataNascimento ?? default,
+            TelefoneDdd        = _favorecido.TelefoneDdd,
+            TelefoneNumero     = _favorecido.TelefoneNumero,
+            EnderecoIbge       = enderecoIbge,
+            EnderecoLogradouro = _favorecido.EnderecoLogradouro,
+            EnderecoNumero     = enderecoNum,
+            EnderecoBairro     = _favorecido.EnderecoBairro,
+            EnderecoUf         = _favorecido.EnderecoUf,
+            EnderecoCep        = _favorecido.EnderecoCep,
+        };
+
+        // Favorecido PJ (CNPJ, docTipo=1 Pamcard) → vincula condutor PF responsável pelo consumo
+        if (_vm.FavorecidoDocumento?.Length == 14 &&
+            !string.IsNullOrWhiteSpace(_vm.MotoristaCpf))
+        {
+            titular = titular with
+            {
+                ConsumoResponsavelCpf  = new string(_vm.MotoristaCpf.Where(char.IsDigit).ToArray()),
+                ConsumoResponsavelNome = _vm.MotoristaNome,
+            };
+        }
+
+        return [titular];
+    }
+
+    private async Task BuscarMotoristaPj()
+    {
+        var cpf = new string((_vm.MotoristaCpf ?? "").Where(char.IsDigit).ToArray());
+        if (cpf.Length != 11)
+        {
+            Snackbar.Add("CPF do motorista deve ter 11 dígitos.", Severity.Warning);
+            return;
+        }
+        var m = await MotoristaService.ObterAsync(cpf);
+        if (m is not null)
+        {
+            _vm.MotoristaCpf  = m.Cpf;
+            _vm.MotoristaNome = m.Nome;
+            Snackbar.Add($"Motorista {m.Nome} encontrado.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Motorista não cadastrado. Preencha o nome ou clique em Cadastrar.", Severity.Info);
+        }
+    }
+
+    private async Task AbrirCadastroMotorista()
+    {
+        var cpfDigits = new string((_vm.MotoristaCpf ?? "").Where(char.IsDigit).ToArray());
+        var prefil = new MotoristaListItem { Cpf = cpfDigits, Nome = _vm.MotoristaNome ?? "", RntrcSituacao = "Ativo" };
+        var parameters = new DialogParameters { ["Original"] = prefil };
+        var dialog = await DialogService.ShowAsync<MotoristaForm>("Novo Motorista", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: MotoristaListItem salvo })
+        {
+            _vm.MotoristaCpf  = salvo.Cpf;
+            _vm.MotoristaNome = salvo.Nome;
+            Snackbar.Add("Motorista cadastrado e vinculado.", Severity.Success);
         }
     }
 
@@ -1378,31 +1566,7 @@
             {
                 ContratanteCnpj = _vm.ContratanteCnpj ?? string.Empty,
                 DataPartida     = _vm.DataPartida?.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy"),
-                Favorecidos =
-                [
-                    new FavorecidoItem
-                    {
-                        Tipo = docTipo,
-                        Nome = _vm.FavorecidoNome ?? string.Empty,
-                        Documentos =
-                        [
-                            new DocumentoFavorecidoItem
-                            {
-                                Tipo   = docTipo,
-                                Numero = _vm.FavorecidoDocumento ?? string.Empty,
-                            }
-                        ],
-                        DataNascimento     = _favorecido.DataNascimento.Value,
-                        TelefoneDdd        = _favorecido.TelefoneDdd,
-                        TelefoneNumero     = _favorecido.TelefoneNumero,
-                        EnderecoIbge       = enderecoIbge,
-                        EnderecoLogradouro = _favorecido.EnderecoLogradouro,
-                        EnderecoNumero     = enderecoNum,
-                        EnderecoBairro     = _favorecido.EnderecoBairro,
-                        EnderecoUf         = _favorecido.EnderecoUf,
-                        EnderecoCep        = _favorecido.EnderecoCep,
-                    }
-                ],
+                Favorecidos = MontarFavorecidos(docTipo, enderecoIbge, enderecoNum),
                 VeiculoPlaca     = _vm.VeiculoPlaca?.Replace("-", ""),
                 VeiculoCategoria = _vm.TipoVeiculo,
                 Origem  = int.TryParse(_vm.OrigemIbge,  out var orig) ? new CidadeLocalizacao { Ibge = orig } : null,
