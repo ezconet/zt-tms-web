@@ -2,6 +2,11 @@ namespace Zenatur.Tms.Application.State;
 
 public class EmissaoViewModel
 {
+    // Fase 0 — Busca por Minuta (pré-preenchimento via LegacyBridge)
+    public string? NumeroMinuta { get; set; }
+    public decimal? ValorFreteLegado { get; set; }
+    public List<PontoParadaViewModel> PontosParada { get; set; } = [];
+
     // Fase 1 — Identificação
     public string? ContratanteCnpj { get; set; }
     public string? FavorecidoDocumento { get; set; }
@@ -63,4 +68,18 @@ public class DocumentoViagemViewModel
 {
     public int     Tipo   { get; set; } = 6; // default NOTA FISCAL
     public string  Numero { get; set; } = string.Empty;
+}
+
+public class PontoParadaViewModel
+{
+    public int     Ordem      { get; set; }
+    public string  Cidade     { get; set; } = string.Empty;
+    public string  Uf         { get; set; } = string.Empty;
+    public string? Ibge       { get; set; }
+    public string? Logradouro { get; set; }
+    public string? Numero     { get; set; }
+    public string? Tipo       { get; set; }
+
+    public string Descricao => $"{Cidade}/{Uf}" +
+        (string.IsNullOrWhiteSpace(Logradouro) ? "" : $" — {Logradouro}{(string.IsNullOrWhiteSpace(Numero) ? "" : ", " + Numero)}");
 }

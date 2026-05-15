@@ -25,6 +25,98 @@
             OnPreviewInteraction="OnStepperPreview"
             Class="mb-4">
 
+    @* ── FASE 0: Busca por Minuta (pré-preenchimento via LegacyBridge) ── *@
+    <MudStep Title="Busca">
+        <MudGrid Spacing="3" Class="mt-2">
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.Search">
+                    Informe o número da Minuta para recuperar os dados da viagem do legado.
+                    Sem minuta? Clique em <strong>Pular</strong> e preencha manualmente.
+                </MudAlert>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_vm.NumeroMinuta"
+                              Label="Número da Minuta"
+                              Variant="Variant.Outlined"
+                              Immediate="true"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              OnAdornmentClick="OnBuscarMinuta"
+                              OnKeyUp="@(async e => { if (e.Key == "Enter") await OnBuscarMinuta(); })" />
+            </MudItem>
+            <MudItem xs="12" md="6" Class="d-flex align-center gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Search"
+                           OnClick="OnBuscarMinuta" Disabled="_buscandoMinuta">
+                    Buscar
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           StartIcon="@Icons.Material.Filled.SkipNext"
+                           OnClick="PularBusca">
+                    Pular (manual)
+                </MudButton>
+            </MudItem>
+
+            @if (_buscandoMinuta)
+            {
+                <MudItem xs="12">
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-1" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Buscando minuta no legado...</MudText>
+                </MudItem>
+            }
+
+            @if (_erroMinuta is not null)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Error" Dense="true" Icon="@Icons.Material.Filled.Block">
+                        @_erroMinuta
+                    </MudAlert>
+                </MudItem>
+            }
+
+            @if (_minuta is not null && !_buscandoMinuta)
+            {
+                <MudItem xs="12">
+                    <MudPaper Elevation="0" Class="pa-4"
+                              Style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px;">
+                        <MudText Typo="Typo.overline" Style="color:#9CA3AF; font-size:10px; letter-spacing:1px;">
+                            DADOS RECUPERADOS DA MINUTA @_minuta.NumeroMinuta
+                        </MudText>
+                        <MudDivider Class="my-2" />
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12" md="6">@ResumoBloco("Favorecido",
+                                _minuta.Favorecido is null ? null : $"{_minuta.Favorecido.Nome} · {_minuta.Favorecido.Documento}")</MudItem>
+                            <MudItem xs="12" md="6">@ResumoBloco("Motorista",
+                                _minuta.Motorista is null ? null : $"{_minuta.Motorista.Nome} · {_minuta.Motorista.Cpf}")</MudItem>
+                            <MudItem xs="12" md="6">@ResumoBloco("Veículo",
+                                _minuta.Veiculo is null ? null : _minuta.Veiculo.Placa +
+                                (_minuta.Veiculo.Reboques.Count > 0 ? $" +{_minuta.Veiculo.Reboques.Count} reb." : ""))</MudItem>
+                            <MudItem xs="12" md="6">@ResumoBloco("Documentos",
+                                _minuta.Documentos.Count == 0 ? null : $"{_minuta.Documentos.Count} doc(s): " +
+                                string.Join(", ", _minuta.Documentos.Select(d => $"{d.Tipo} {d.Numero}")))</MudItem>
+                            <MudItem xs="12" md="6">@ResumoBloco("Origem → Destino",
+                                (_minuta.Origem is null || _minuta.Destino is null) ? null :
+                                $"{_minuta.Origem.Cidade}/{_minuta.Origem.Uf} → {_minuta.Destino.Cidade}/{_minuta.Destino.Uf}")</MudItem>
+                            <MudItem xs="12" md="6">@ResumoBloco("Pontos de Parada",
+                                _minuta.PontosParada.Count == 0 ? null : $"{_minuta.PontosParada.Count} ponto(s)")</MudItem>
+                            <MudItem xs="12" md="6">@ResumoBloco("Valor Frete (legado)",
+                                _minuta.ValorFreteLegado is decimal vf ? vf.ToString("C", _culturaBr) : null)</MudItem>
+                        </MudGrid>
+                        <MudDivider Class="my-3" />
+                        <MudText Typo="Typo.caption" Style="color:#6B7280;">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Style="color:#10B981; font-size:14px;vertical-align:middle;" />
+                            recuperado &nbsp;·&nbsp;
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Style="color:#D97706; font-size:14px;vertical-align:middle;" />
+                            ausente — completar manualmente nos próximos passos.
+                            Clique em <strong>Próximo</strong> para continuar.
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudStep>
+
     @* ── FASE 1: Identificação ── *@
     <MudStep Title="Identificação" HasError="@(!_fase1Valida && (_favorecido is not null || _erroFase1 is not null))">
         <MudGrid Spacing="3" Class="mt-2">
@@ -414,6 +506,61 @@
                 </MudItem>
             }
 
+            <MudItem xs="12">
+                <MudDivider Class="my-1" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudText Typo="Typo.overline" Style="color:#6B7280; font-size:10px; letter-spacing:1px;">
+                        PONTOS DE PARADA (PEDÁGIO)
+                    </MudText>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.AddLocation"
+                               OnClick="AdicionarPontoParada">
+                        Adicionar Parada
+                    </MudButton>
+                </MudStack>
+                <MudText Typo="Typo.caption" Style="color:#9CA3AF;">
+                    Cidades intermediárias da rota — usadas no cálculo de pedágio Pamcard. Vazio = rota direta.
+                </MudText>
+            </MudItem>
+
+            @if (_vm.PontosParada.Count == 0)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        Sem pontos de parada — pedágio calculado pela rota direta origem → destino.
+                    </MudAlert>
+                </MudItem>
+            }
+            else
+            {
+                @for (int i = 0; i < _vm.PontosParada.Count; i++)
+                {
+                    var pidx = i;
+                    var pp = _vm.PontosParada[pidx];
+                    <MudItem xs="12" md="5">
+                        <MudAutocomplete T="CidadeIbgeItem"
+                                         Value="@(_cidadesIbge.FirstOrDefault(c => c.Ibge == pp.Ibge))"
+                                         ValueChanged="@(c => OnPontoParadaCidadeChanged(pidx, c))"
+                                         SearchFunc="BuscarCidades"
+                                         ToStringFunc="@(c => c?.Descricao ?? string.Empty)"
+                                         Label="@($"Parada {pp.Ordem} — Cidade")"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense"
+                                         Clearable="true" MaxItems="50" MinCharacters="1"
+                                         DebounceInterval="200" CoerceText="true" />
+                    </MudItem>
+                    <MudItem xs="10" md="6">
+                        <MudTextField @bind-Value="pp.Logradouro"
+                                      Label="Endereço (opcional)"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="2" md="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error" Size="Size.Small"
+                                       OnClick="@(() => RemoverPontoParada(pidx))" />
+                    </MudItem>
+                }
+            }
+
             @if (_erroFase2 is not null)
             {
                 <MudItem xs="12">
@@ -514,6 +661,40 @@
                                 · <strong>Frete mínimo ANTT:</strong> @freteMin.ToString("C", _culturaBr)
                             </MudText>
                         </MudStack>
+                    </MudPaper>
+                </MudItem>
+            }
+
+            @if (_vm.ValorFreteLegado is decimal vfl)
+            {
+                var fmin = _vm.FreteMinimoAntt ?? 0m;
+                var abaixo = fmin > 0 && vfl < fmin;
+                <MudItem xs="12">
+                    <MudPaper Elevation="0" Class="pa-3"
+                              Style="@($"border-radius:8px; border:1px solid {(abaixo ? "#F59E0B" : "#10B981")}; background:{(abaixo ? "#FFFBEB" : "#ECFDF5")};")">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">
+                                <strong>Frete da Minuta (legado):</strong> @vfl.ToString("C", _culturaBr)
+                                &nbsp;·&nbsp;
+                                <strong>Frete mínimo ANTT:</strong> @(fmin > 0 ? fmin.ToString("C", _culturaBr) : "—")
+                                &nbsp;·&nbsp;
+                                <strong>Diferença:</strong>
+                                <span style="@($"color:{(abaixo ? "#B45309" : "#047857")}; font-weight:700;")">
+                                    @((vfl - fmin).ToString("C", _culturaBr))
+                                </span>
+                            </MudText>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.ContentCopy"
+                                       OnClick="@(() => { _vm.ValorFrete = vfl; RecalcularParcelas(); })">
+                                Usar valor da minuta
+                            </MudButton>
+                        </MudStack>
+                        @if (abaixo)
+                        {
+                            <MudText Typo="Typo.caption" Style="color:#B45309;">
+                                Valor do legado abaixo do mínimo ANTT — confira antes de emitir.
+                            </MudText>
+                        }
                     </MudPaper>
                 </MudItem>
             }
@@ -824,6 +1005,12 @@
     private string? _erroFase4;
     private string? _protocoloEmitido;
     private FavorecidoDto? _favorecido;
+
+    // ── Fase 0: Busca por Minuta ──
+    private bool _buscandoMinuta;
+    private string? _erroMinuta;
+    private MinutaViagemResponse? _minuta;
+
     private List<string> _fontesDados = [];
     private bool _prioridadeBridge; // futuro A14-A17: priority quando Bridge entrar
 
@@ -871,7 +1058,9 @@
         {
             _vm = State.EmissaoEmAndamento;
             _documentoBusca = _vm.FavorecidoDocumento ?? string.Empty;
-            _faseIndex = State.FaseAtual > 0 ? State.FaseAtual - 1 : 0;
+            // Layout: 0=Busca 1=Identificação 2=Logística 3=Viagem 4=Valores 5=Revisão.
+            // State.FaseAtual: 0=nenhuma(Busca) 1=Identificação ... 4=Valores.
+            _faseIndex = Math.Clamp(State.FaseAtual, 0, 5);
         }
         else
         {
@@ -1049,8 +1238,13 @@
 
         if (indoPara <= saindoDe) return;
 
-        // ── Fase 1 → 2 ──
+        // ── Fase 0 (Busca) → 1 (Identificação) — opcional, nada a validar ──
         if (saindoDe == 0)
+        {
+            return;
+        }
+        // ── Fase 1 (Identificação) → 2 (Logística) ──
+        if (saindoDe == 1)
         {
             if (string.IsNullOrWhiteSpace(_vm.ContratanteCnpj))
             {
@@ -1087,8 +1281,8 @@
             }
             State.AvancarFase();
         }
-        // ── Fase 2 → 3 ──
-        else if (saindoDe == 1)
+        // ── Fase 2 (Logística) → 3 (Viagem) ──
+        else if (saindoDe == 2)
         {
             _erroFase2 = null;
 
@@ -1114,7 +1308,7 @@
             State.AvancarFase();
         }
         // ── Fase 3 (Viagem) → 4 (Valores) ──
-        else if (saindoDe == 2)
+        else if (saindoDe == 3)
         {
             _erroFase3viagem = null;
 
@@ -1127,7 +1321,7 @@
             State.AvancarFase();
         }
         // ── Fase 4 (Valores) → 5 (Revisão) ──
-        else if (saindoDe == 3)
+        else if (saindoDe == 4)
         {
             _erroFase3 = null;
 
@@ -1158,6 +1352,155 @@
     private void AdicionarDocumentoViagem()
     {
         _vm.DocumentosViagem.Add(new DocumentoViagemViewModel { Tipo = 6 });
+    }
+
+    // ── Fase 0: Busca por Minuta ──
+    private async Task OnBuscarMinuta()
+    {
+        _erroMinuta = null;
+        _minuta     = null;
+        var numero  = (_vm.NumeroMinuta ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(numero))
+        {
+            _erroMinuta = "Informe o número da Minuta.";
+            return;
+        }
+
+        _buscandoMinuta = true;
+        StateHasChanged();
+        try
+        {
+            var r = await Bridge.GetMinutaAsync(numero);
+            if (r.IsFailed)
+            {
+                _erroMinuta = "Falha ao consultar o legado. Tente novamente ou siga manualmente (Pular).";
+                return;
+            }
+            if (r.Value is null)
+            {
+                _erroMinuta = $"Minuta {numero} não localizada no legado.";
+                return;
+            }
+
+            _minuta = r.Value;
+            await AplicarMinuta(_minuta);
+            Snackbar.Add($"Minuta {numero} recuperada. Confira os dados e avance.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _erroMinuta = $"Erro ao buscar minuta: {ex.Message}";
+        }
+        finally
+        {
+            _buscandoMinuta = false;
+            StateHasChanged();
+        }
+    }
+
+    private void PularBusca()
+    {
+        _erroMinuta = null;
+        _minuta     = null;
+        _faseIndex  = 1; // vai direto para Identificação
+    }
+
+    private async Task AplicarMinuta(MinutaViagemResponse m)
+    {
+        // Documentos da viagem (NF / CT-e / etc)
+        if (m.Documentos.Count > 0)
+        {
+            _vm.DocumentosViagem = m.Documentos
+                .Where(d => !string.IsNullOrWhiteSpace(d.Numero))
+                .Select(d => new DocumentoViagemViewModel { Tipo = d.TipoCodigo, Numero = d.Numero })
+                .ToList();
+        }
+
+        // Origem / Destino
+        if (m.Origem?.Ibge is int oibge)
+        {
+            _origemSelecionada  = _cidadesIbge.FirstOrDefault(c => c.Ibge == oibge.ToString());
+            _vm.OrigemIbge      = oibge.ToString();
+            _vm.OrigemDescricao = _origemSelecionada?.Descricao ?? $"{m.Origem.Cidade}/{m.Origem.Uf}";
+        }
+        if (m.Destino?.Ibge is int dibge)
+        {
+            _destinoSelecionada  = _cidadesIbge.FirstOrDefault(c => c.Ibge == dibge.ToString());
+            _vm.DestinoIbge      = dibge.ToString();
+            _vm.DestinoDescricao = _destinoSelecionada?.Descricao ?? $"{m.Destino.Cidade}/{m.Destino.Uf}";
+        }
+
+        // Pontos de parada
+        _vm.PontosParada = m.PontosParada
+            .OrderBy(p => p.Ordem)
+            .Select(p => new PontoParadaViewModel
+            {
+                Ordem      = p.Ordem,
+                Cidade     = p.Cidade,
+                Uf         = p.Uf,
+                Ibge       = p.Ibge?.ToString(),
+                Logradouro = p.Logradouro,
+                Numero     = p.Numero,
+                Tipo       = p.Tipo,
+            })
+            .ToList();
+
+        // Valor do frete do legado
+        _vm.ValorFreteLegado = m.ValorFreteLegado;
+        if (m.ValorFreteLegado is decimal vfl && _vm.ValorFrete <= 0)
+            _vm.ValorFrete = vfl;
+
+        // Veículo (placa pré-preenche Fase 2)
+        if (m.Veiculo is not null && string.IsNullOrEmpty(_vm.VeiculoPlaca))
+        {
+            _vm.VeiculoPlaca = m.Veiculo.Placa.Replace("-", "").ToUpperInvariant();
+            if (m.Veiculo.Reboques.Count > 0)
+                _vm.ReboquesPlacas = m.Veiculo.Reboques
+                    .OrderBy(r => r.Ordem)
+                    .Select(r => r.Placa.Replace("-", "").ToUpperInvariant())
+                    .ToList();
+            if (m.Veiculo.TipoVeiculoLegado is not null && string.IsNullOrEmpty(_vm.TipoVeiculo))
+            {
+                var pamcardId = TipoVeiculoLegadoMapper.MapearParaPamcard(m.Veiculo.TipoVeiculoLegado.Id);
+                if (pamcardId is not null) _vm.TipoVeiculo = pamcardId;
+            }
+        }
+
+        // Motorista condutor (usado quando favorecido é PJ)
+        if (m.Motorista is not null)
+        {
+            _vm.MotoristaCpf  = m.Motorista.Cpf;
+            _vm.MotoristaNome = m.Motorista.Nome;
+        }
+
+        // Favorecido: dispara a busca padrão (CIOT + Bridge merge).
+        // Se não existir, o fluxo de cadastro inline na Identificação assume.
+        if (m.Favorecido is not null && !string.IsNullOrWhiteSpace(m.Favorecido.Documento))
+        {
+            _documentoBusca = m.Favorecido.Documento;
+            await BuscarFavorecido(m.Favorecido.Documento);
+        }
+    }
+
+    private void AdicionarPontoParada()
+    {
+        _vm.PontosParada.Add(new PontoParadaViewModel { Ordem = _vm.PontosParada.Count + 1 });
+    }
+
+    private void RemoverPontoParada(int idx)
+    {
+        if (idx < 0 || idx >= _vm.PontosParada.Count) return;
+        _vm.PontosParada.RemoveAt(idx);
+        for (var i = 0; i < _vm.PontosParada.Count; i++)
+            _vm.PontosParada[i].Ordem = i + 1;
+    }
+
+    private void OnPontoParadaCidadeChanged(int idx, CidadeIbgeItem? c)
+    {
+        if (idx < 0 || idx >= _vm.PontosParada.Count) return;
+        var p = _vm.PontosParada[idx];
+        p.Ibge   = c?.Ibge;
+        p.Cidade = c?.Cidade ?? string.Empty;
+        p.Uf     = c?.Uf ?? string.Empty;
     }
 
     private static string DescricaoTipoDocViagem(int tipo) => tipo switch
@@ -1383,6 +1726,10 @@
                 VeiculoCategoria = _vm.TipoVeiculo,
                 Origem           = new CidadeLocalizacao { Ibge = ibgeOrig },
                 Destino          = new CidadeLocalizacao { Ibge = ibgeDest },
+                Pontos           = _vm.PontosParada
+                                       .Where(p => int.TryParse(p.Ibge, out _))
+                                       .Select(p => new CidadeLocalizacao { Ibge = int.Parse(p.Ibge!) })
+                                       .ToList(),
                 ObterPraca       = true,
                 ObterRota        = true,
                 IdaVolta         = false,
@@ -1571,6 +1918,10 @@
                 VeiculoCategoria = _vm.TipoVeiculo,
                 Origem  = int.TryParse(_vm.OrigemIbge,  out var orig) ? new CidadeLocalizacao { Ibge = orig } : null,
                 Destino = int.TryParse(_vm.DestinoIbge, out var dest) ? new CidadeLocalizacao { Ibge = dest } : null,
+                Pontos  = _vm.PontosParada
+                              .Where(p => int.TryParse(p.Ibge, out _))
+                              .Select(p => new CidadeLocalizacao { Ibge = int.Parse(p.Ibge!) })
+                              .ToList(),
                 PedagioValor = _vm.ValorPedagio,
                 Documentos = _vm.DocumentosViagem.Select(d => new DocumentoViagemItem
                 {
@@ -1616,6 +1967,8 @@
         State.Limpar();
         _vm = new EmissaoViewModel();
         _documentoBusca   = string.Empty;
+        _minuta           = null;
+        _erroMinuta       = null;
         _favorecido       = null;
         _meiosFavorecido  = [];
         _unidadesFiltradas= [];
@@ -1686,6 +2039,21 @@
 
 @* helper de linha de revisão *@
 @code {
+    private RenderFragment ResumoBloco(string Label, string? Valor) => __builder =>
+    {
+        var ok = !string.IsNullOrWhiteSpace(Valor);
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(ok ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
+                     Style="@($"font-size:18px; color:{(ok ? "#10B981" : "#D97706")};")" />
+            <div>
+                <MudText Typo="Typo.caption" Style="color:#6B7280;">@Label</MudText>
+                <MudText Typo="Typo.body2" Style="color:#111827; font-weight:500;">
+                    @(ok ? Valor : "completar manualmente")
+                </MudText>
+            </div>
+        </MudStack>
+    };
+
     private RenderFragment ReviewRow(string Label, string? Valor, bool Mono = false) => __builder =>
     {
         <div class="d-flex justify-space-between align-center" style="padding:3px 0;">

@@ -36,6 +36,12 @@ internal sealed class HttpLegacyBridgeClient : ILegacyBridgeClient
         return await GetOrNotFoundAsync<VeiculoLegadoResponse>($"/v1/legacy/veiculos/{p}", ct);
     }
 
+    public async Task<Result<MinutaViagemResponse?>> GetMinutaAsync(string numeroMinuta, CancellationToken ct = default)
+    {
+        var n = Uri.EscapeDataString(numeroMinuta.Trim());
+        return await GetOrNotFoundAsync<MinutaViagemResponse>($"/v1/legacy/minutas/{n}", ct);
+    }
+
     private async Task<Result<T?>> GetOrNotFoundAsync<T>(string url, CancellationToken ct) where T : class
     {
         try
