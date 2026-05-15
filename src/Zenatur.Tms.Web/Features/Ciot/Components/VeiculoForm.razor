@@ -1,6 +1,8 @@
 @using Zenatur.Tms.Application.Veiculos
+@using Zenatur.Tms.Application.Composicoes
 @using Zenatur.Tms.Application.Domain
 @inject IVeiculoManagementService Service
+@inject IComposicaoManagementService ComposicaoService
 @inject IDomainService DomainService
 @inject ISnackbar Snackbar
 
@@ -63,6 +65,58 @@
                 <MudTextField @bind-Value="_form.ProprietarioFavorecidoDocumento" Label="Doc. Proprietário" Variant="Variant.Outlined"
                               HelperText="CPF/CNPJ favorecido (opcional)" />
             </MudItem>
+            @if (_form.TipoTracao == 1)
+            {
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <div>
+                            <MudText Typo="Typo.overline" Style="color:#6B7280;font-size:10px;letter-spacing:1px;">
+                                COMPOSIÇÃO (REBOQUES)
+                            </MudText>
+                            <MudText Typo="Typo.caption" Style="color:#9CA3AF;display:block;">
+                                Reboques desta composição (máx 3). Cavalo = esta placa.
+                            </MudText>
+                        </div>
+                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="AddReboque" Disabled="@(_reboques.Count >= 3)">
+                            Adicionar Reboque
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+
+                @for (int i = 0; i < _reboques.Count; i++)
+                {
+                    var idx = i;
+                    var reb = _reboques[idx];
+                    <MudItem xs="9" md="9">
+                        <MudSelect T="string" @bind-Value="reb.Placa" Label="@($"Reboque {idx + 1}")"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense">
+                            @foreach (var v in _veiculosReboque)
+                            {
+                                <MudSelectItem Value="@v.Placa">@v.Placa — @v.Marca @v.Modelo</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="2" md="2">
+                        <MudNumericField T="int" @bind-Value="reb.Ordem" Label="Ordem"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="3" />
+                    </MudItem>
+                    <MudItem xs="1" md="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                       OnClick="@(() => _reboques.RemoveAt(idx))" />
+                    </MudItem>
+                }
+                @if (_reboques.Count > 0)
+                {
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_nomeComposicao" Label="Nome da Composição"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      HelperText="Identificação da combinação cavalo+reboques" />
+                    </MudItem>
+                }
+            }
+
             @if (_erro is not null)
             {
                 <MudItem xs="12"><MudAlert Severity="Severity.Error" Dense="true">@_erro</MudAlert></MudItem>
@@ -86,12 +140,35 @@
     private bool _salvando;
 
     private IReadOnlyList<DomainItem> _categorias = [];
+    private IReadOnlyList<VeiculoListItem> _veiculosReboque = [];
+    private List<ReboqueItem> _reboques = [];
+    private string _nomeComposicao = "";
+    private ComposicaoListItem? _composicaoExistente;
 
     protected override async Task OnInitializedAsync()
     {
         _form = Original?.Clone() ?? new VeiculoListItem { TipoTracao = 1 };
         _categorias = await DomainService.GetTiposVeiculoAsync();
+        _veiculosReboque = await Service.ListarAsync(tipoTracao: 2);
+
+        // Edição de tracionante: carrega composição existente (se houver)
+        if (IsEdicao && _form.TipoTracao == 1)
+        {
+            var comps = await ComposicaoService.ListarAsync(_form.Placa);
+            _composicaoExistente = comps.FirstOrDefault();
+            if (_composicaoExistente is not null)
+            {
+                _nomeComposicao = _composicaoExistente.Nome;
+                _reboques = _composicaoExistente.Reboques
+                    .OrderBy(r => r.Ordem)
+                    .Select(r => new ReboqueItem { Placa = r.Placa, Ordem = r.Ordem })
+                    .ToList();
+            }
+        }
     }
+
+    private void AddReboque()
+        => _reboques.Add(new ReboqueItem { Ordem = _reboques.Count + 1 });
 
     private async Task Salvar()
     {
@@ -99,11 +176,37 @@
         if (string.IsNullOrWhiteSpace(_form.Placa)) { _erro = "Placa obrigatória."; return; }
         if (string.IsNullOrWhiteSpace(_form.CategoriaVeiculo)) { _erro = "Categoria obrigatória."; return; }
         _form.Placa = _form.Placa.ToUpperInvariant().Replace("-", "");
+
+        if (_form.TipoTracao == 1 && _reboques.Count > 0)
+        {
+            if (_reboques.Any(r => string.IsNullOrWhiteSpace(r.Placa)))
+            { _erro = "Todos os reboques precisam de placa."; return; }
+            if (_reboques.Select(r => r.Ordem).Distinct().Count() != _reboques.Count)
+            { _erro = "Ordem de reboque duplicada."; return; }
+        }
+
         _salvando = true;
         try
         {
             await Service.SalvarAsync(_form);
-            Snackbar.Add($"Veículo {(IsEdicao ? "atualizado" : "cadastrado")}.", Severity.Success);
+
+            // Tracionante com reboques → cria/atualiza composição na mesma ação
+            if (_form.TipoTracao == 1 && _reboques.Count > 0)
+            {
+                await ComposicaoService.SalvarAsync(new ComposicaoListItem
+                {
+                    Id               = _composicaoExistente?.Id ?? 0,
+                    Nome             = string.IsNullOrWhiteSpace(_nomeComposicao)
+                                        ? $"Composição {_form.Placa}"
+                                        : _nomeComposicao,
+                    TracionantePlaca = _form.Placa,
+                    Reboques         = _reboques,
+                });
+            }
+
+            Snackbar.Add($"Veículo {(IsEdicao ? "atualizado" : "cadastrado")}" +
+                         (_form.TipoTracao == 1 && _reboques.Count > 0 ? " + composição" : "") + ".",
+                         Severity.Success);
             MudDialog.Close(DialogResult.Ok(_form));
         }
         catch (Exception ex) { _erro = ex.Message; }

@@ -16,11 +16,10 @@
             <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
             Composições
         </span>
-        <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                   StartIcon="@Icons.Material.Filled.Add" OnClick="AbrirNovo"
-                   Style="border-color:rgba(0,0,0,0.2); color:#1f2937; font-size:12px;">
-            Nova Composição
-        </MudButton>
+        <MudChip T="string" Size="Size.Small" Label="true"
+                 Style="background:rgba(255,255,255,0.2);color:#fff;font-size:11px;">
+            Somente consulta — cadastre no Veículo (tracionante)
+        </MudChip>
     </div>
     <MudCardContent Class="pa-0">
         @if (_carregando)
@@ -29,7 +28,9 @@
         }
         else if (_lista.Count == 0)
         {
-            <MudAlert Severity="Severity.Info" Class="ma-4">Nenhuma composição cadastrada.</MudAlert>
+            <MudAlert Severity="Severity.Info" Class="ma-4">
+                Nenhuma composição. Composições são criadas no cadastro do Veículo tracionante (aba Reboques).
+            </MudAlert>
         }
         else
         {
@@ -51,7 +52,6 @@
                         }
                     </MudTd>
                     <MudTd Style="text-align:right;">
-                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => AbrirEdicao(context)" />
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => Remover(context)" />
                     </MudTd>
                 </RowTemplate>
@@ -78,21 +78,6 @@
         _carregando = true;
         try { _lista = (await Service.ListarAsync()).ToList(); }
         finally { _carregando = false; }
-    }
-
-    private async Task AbrirNovo()
-    {
-        var d = await Dialog.ShowAsync<ComposicaoForm>("Nova Composição",
-            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
-        if (await d.Result is { Canceled: false }) await CarregarAsync();
-    }
-
-    private async Task AbrirEdicao(ComposicaoListItem c)
-    {
-        var p = new DialogParameters { ["Original"] = c };
-        var d = await Dialog.ShowAsync<ComposicaoForm>("Editar Composição", p,
-            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
-        if (await d.Result is { Canceled: false }) await CarregarAsync();
     }
 
     private async Task Remover(ComposicaoListItem c)
