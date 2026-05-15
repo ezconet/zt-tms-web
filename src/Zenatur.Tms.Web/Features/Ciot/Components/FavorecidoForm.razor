@@ -423,6 +423,12 @@
                         TelefoneNumero = _form.TelefoneNumero,
                         CnhNumero      = _cnhNumero,
                         CnhCategoria   = _cnhCategoria,
+                        Logradouro         = _form.EnderecoLogradouro,
+                        EnderecoNumero     = int.TryParse(_form.EnderecoNumero, out var en) ? en : (int?)null,
+                        Bairro             = _form.EnderecoBairro,
+                        EnderecoCidadeIbge = _form.EnderecoCidadeIbge,
+                        EnderecoUf         = _form.EnderecoUf,
+                        Cep                = _form.EnderecoCep,
                     });
                     Snackbar.Add("Favorecido + Motorista cadastrados.", Severity.Success);
                 }

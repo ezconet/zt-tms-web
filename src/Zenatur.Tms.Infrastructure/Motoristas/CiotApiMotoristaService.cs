@@ -10,6 +10,8 @@ internal sealed class CiotApiMotoristaService : IMotoristaManagementService
     private readonly ILogger<CiotApiMotoristaService> _logger;
     private const string ContratanteCnpj = "53717120000170";
 
+    private static string SoDigitos(string? s) => new((s ?? "").Where(char.IsDigit).ToArray());
+
     public CiotApiMotoristaService(CiotApiHttpClient http, ILogger<CiotApiMotoristaService> logger)
     {
         _http   = http;
@@ -54,6 +56,12 @@ internal sealed class CiotApiMotoristaService : IMotoristaManagementService
             cnhNumero       = m.CnhNumero,
             cnhCategoria    = m.CnhCategoria,
             cnhValidade     = m.CnhValidade,
+            logradouro      = m.Logradouro,
+            enderecoNumero  = m.EnderecoNumero,
+            bairro          = m.Bairro,
+            cidadeIbge      = int.TryParse(m.EnderecoCidadeIbge, out var ci) ? ci : (int?)null,
+            enderecoUf      = m.EnderecoUf,
+            cep             = SoDigitos(m.Cep),
         };
 
         if (existente is null)

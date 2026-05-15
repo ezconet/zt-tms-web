@@ -22,6 +22,12 @@ public class MotoristaListItem
     public string?   CnhNumero      { get; set; }
     public string?   CnhCategoria   { get; set; }
     public DateOnly? CnhValidade    { get; set; }
+    public string?   Logradouro         { get; set; }
+    public int?      EnderecoNumero     { get; set; }
+    public string?   Bairro             { get; set; }
+    public string?   EnderecoCidadeIbge { get; set; }
+    public string?   EnderecoUf         { get; set; }
+    public string?   Cep                { get; set; }
     public bool      Ativo          { get; set; } = true;
     public DateTime  AtualizadoEm   { get; set; }
 
@@ -31,6 +37,8 @@ public class MotoristaListItem
         Rntrc = Rntrc, RntrcSituacao = RntrcSituacao, RntrcValidade = RntrcValidade,
         TelefoneDdd = TelefoneDdd, TelefoneNumero = TelefoneNumero,
         CnhNumero = CnhNumero, CnhCategoria = CnhCategoria, CnhValidade = CnhValidade,
+        Logradouro = Logradouro, EnderecoNumero = EnderecoNumero, Bairro = Bairro,
+        EnderecoCidadeIbge = EnderecoCidadeIbge, EnderecoUf = EnderecoUf, Cep = Cep,
         Ativo = Ativo, AtualizadoEm = AtualizadoEm,
     };
 }
