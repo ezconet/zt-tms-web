@@ -1,5 +1,7 @@
 @using Zenatur.Tms.Application.Favorecidos
+@using Zenatur.Tms.Application.Domain
 @inject IFavorecidoManagementService Service
+@inject IDomainService DomainService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -75,11 +77,13 @@
 
             <MudItem xs="12" md="4">
                 <MudDatePicker @bind-Date="_dataNascimento"
-                               Label="Data de Nascimento"
+                               Label="Data de Nascimento/Constituição"
                                Variant="Variant.Outlined"
                                DateFormat="dd/MM/yyyy"
+                               Editable="true"
                                MaxDate="DateTime.Today"
-                               Required="true" />
+                               Required="true"
+                               HelperText="Digite dd/MM/aaaa" />
             </MudItem>
 
             <MudItem xs="12">
@@ -104,27 +108,47 @@
             <MudItem xs="6" md="2">
                 <MudTextField @bind-Value="_form.EnderecoCep"
                               Label="CEP"
-                              Variant="Variant.Outlined" />
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              HelperText="Obrigatório (Pamcard)" />
             </MudItem>
 
-            <MudItem xs="12" md="5">
+            <MudItem xs="12" md="4">
                 <MudTextField @bind-Value="_form.EnderecoBairro"
                               Label="Bairro"
                               Variant="Variant.Outlined" />
             </MudItem>
 
-            <MudItem xs="8" md="5">
-                <MudTextField @bind-Value="_form.EnderecoCidadeIbge"
-                              Label="Código IBGE Cidade"
-                              Variant="Variant.Outlined"
-                              HelperText="7 dígitos" />
+            <MudItem xs="12" md="6">
+                <MudAutocomplete T="CidadeIbgeItem"
+                                 Value="_cidadeSelecionada"
+                                 ValueChanged="OnCidadeChanged"
+                                 SearchFunc="BuscarCidades"
+                                 ToStringFunc="@(c => c?.Descricao ?? string.Empty)"
+                                 Label="Cidade"
+                                 Variant="Variant.Outlined"
+                                 Clearable="true"
+                                 MinCharacters="1"
+                                 DebounceInterval="200"
+                                 HelperText="Digite — IBGE + UF preenchem sozinhos" />
             </MudItem>
 
-            <MudItem xs="4" md="2">
-                <MudTextField @bind-Value="_form.EnderecoUf"
-                              Label="UF"
+            <MudItem xs="6" md="4">
+                <MudTextField @bind-Value="_form.EnderecoCidadeIbge"
+                              Label="Código IBGE"
                               Variant="Variant.Outlined"
-                              MaxLength="2" />
+                              ReadOnly="true"
+                              HelperText="Automático" />
+            </MudItem>
+
+            <MudItem xs="6" md="2">
+                <MudSelect T="string" @bind-Value="_form.EnderecoUf"
+                           Label="UF" Variant="Variant.Outlined">
+                    @foreach (var uf in _ufs)
+                    {
+                        <MudSelectItem Value="@uf">@uf</MudSelectItem>
+                    }
+                </MudSelect>
             </MudItem>
 
             <MudItem xs="12">
@@ -204,10 +228,18 @@
         <MudButton OnClick="Cancelar">Cancelar</MudButton>
         <MudButton Color="Color.Primary"
                    Variant="Variant.Filled"
-                   StartIcon="@Icons.Material.Filled.Save"
+                   StartIcon="@(_salvando ? null : Icons.Material.Filled.Save)"
                    OnClick="Salvar"
                    Disabled="_salvando">
-            @(IsEdicao ? "Atualizar" : "Cadastrar")
+            @if (_salvando)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Salvando...</span>
+            }
+            else
+            {
+                <span>@(IsEdicao ? "Atualizar" : "Cadastrar")</span>
+            }
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -226,8 +258,16 @@
     private DateTime?          _dataNascimento;
     private string?            _erro;
     private bool               _salvando;
+    private CidadeIbgeItem?    _cidadeSelecionada;
+    private IReadOnlyList<CidadeIbgeItem> _cidades = [];
 
-    protected override void OnInitialized()
+    private static readonly string[] _ufs =
+    [
+        "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+        "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
+    ];
+
+    protected override async Task OnInitializedAsync()
     {
         if (Original is not null)
         {
@@ -245,6 +285,39 @@
             _documento = DocumentoPreenchido ?? string.Empty;
         }
         if (_form.DataNascimento is DateOnly dn) _dataNascimento = dn.ToDateTime(TimeOnly.MinValue);
+
+        _cidades = await DomainService.GetCidadesAsync();
+        if (!string.IsNullOrEmpty(_form.EnderecoCidadeIbge))
+            _cidadeSelecionada = _cidades.FirstOrDefault(c => c.Ibge == _form.EnderecoCidadeIbge);
+    }
+
+    private static string RemoverAcentos(string s)
+    {
+        var norm = s.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(norm.Length);
+        foreach (var ch in norm)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(ch);
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
+    }
+
+    private Task<IEnumerable<CidadeIbgeItem>> BuscarCidades(string? termo, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(termo))
+            return Task.FromResult(Enumerable.Empty<CidadeIbgeItem>());
+        var t = RemoverAcentos(termo.Trim()).ToLowerInvariant();
+        return Task.FromResult(_cidades
+            .Where(c => RemoverAcentos(c.Cidade).Contains(t, StringComparison.OrdinalIgnoreCase)
+                     || c.Uf.Equals(termo.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Take(50));
+    }
+
+    private void OnCidadeChanged(CidadeIbgeItem? c)
+    {
+        _cidadeSelecionada = c;
+        if (c is null) return;
+        _form.EnderecoCidadeIbge = c.Ibge;
+        _form.EnderecoUf         = c.Uf;
     }
 
     private void AdicionarConta()
@@ -268,7 +341,11 @@
         if (string.IsNullOrWhiteSpace(_form.TelefoneDdd) || string.IsNullOrWhiteSpace(_form.TelefoneNumero))
         { _erro = "Telefone é obrigatório."; return; }
         if (_dataNascimento is null)
-        { _erro = "Data de Nascimento é obrigatória."; return; }
+        { _erro = "Data de Nascimento/Constituição é obrigatória."; return; }
+        if (string.IsNullOrWhiteSpace(_form.EnderecoCep))
+        { _erro = "CEP é obrigatório (exigido pela Pamcard)."; return; }
+        if (string.IsNullOrWhiteSpace(_form.EnderecoCidadeIbge))
+        { _erro = "Selecione a Cidade."; return; }
 
         _form.DataNascimento = DateOnly.FromDateTime(_dataNascimento.Value);
 

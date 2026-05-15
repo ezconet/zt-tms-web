@@ -39,11 +39,20 @@ Console.WriteLine($"ExternalId: {payload.ExternalId}");
 Console.WriteLine($"Nonce:      {payload.Nonce}");
 Console.WriteLine($"Expira:     {payload.ExpiresAt:u}");
 Console.WriteLine();
-Console.WriteLine("TOKEN (use no POST /auth/external-login campo 'token'):");
+Console.WriteLine("TOKEN RAW (base64 — NÃO url-encodar manualmente):");
 Console.WriteLine(token);
 Console.WriteLine();
 Console.WriteLine("CURL de teste:");
-Console.WriteLine($"curl -X POST https://localhost:7001/auth/external-login -d \"token={Uri.EscapeDataString(token)}\"");
+Console.WriteLine($"curl -X POST https://localhost:7088/auth/external-login -d \"token={Uri.EscapeDataString(token)}\"");
+Console.WriteLine();
+Console.WriteLine("DEVTOOLS — cole no console (token RAW, encodeURIComponent encoda 1x):");
+Console.WriteLine("fetch('/auth/external-login', {");
+Console.WriteLine("  method: 'POST',");
+Console.WriteLine("  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },");
+Console.WriteLine($"  body: 'token=' + encodeURIComponent('{token}'),");
+Console.WriteLine("  redirect: 'follow',");
+Console.WriteLine("  credentials: 'include'");
+Console.WriteLine("}).then(r => location.href = '/');");
 
 static string Encrypt<T>(T obj, byte[] key)
 {
