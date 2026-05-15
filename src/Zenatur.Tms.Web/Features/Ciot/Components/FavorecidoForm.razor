@@ -1,6 +1,8 @@
 @using Zenatur.Tms.Application.Favorecidos
 @using Zenatur.Tms.Application.Domain
+@using Zenatur.Tms.Application.Motoristas
 @inject IFavorecidoManagementService Service
+@inject IMotoristaManagementService MotoristaService
 @inject IDomainService DomainService
 @inject ISnackbar Snackbar
 
@@ -37,6 +39,15 @@
                               Variant="Variant.Outlined"
                               Required="true" />
             </MudItem>
+
+            @if (_form.DocumentoTipo == 1 && !IsEdicao)
+            {
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_tambemMotorista"
+                                 Label="Cadastrar também como Motorista (mesmo CPF)"
+                                 Color="Color.Primary" Dense="true" />
+                </MudItem>
+            }
 
             <MudItem xs="12" md="6">
                 <MudTextField @bind-Value="_form.Rntrc"
@@ -258,6 +269,7 @@
     private DateTime?          _dataNascimento;
     private string?            _erro;
     private bool               _salvando;
+    private bool               _tambemMotorista = true;
     private CidadeIbgeItem?    _cidadeSelecionada;
     private IReadOnlyList<CidadeIbgeItem> _cidades = [];
 
@@ -354,7 +366,34 @@
         {
             _form.Documento = docLimpo;
             var salvo = await Service.SalvarAsync(_form);
-            Snackbar.Add($"Favorecido {(IsEdicao ? "atualizado" : "cadastrado")} com sucesso!", Severity.Success);
+
+            // PF + opção marcada → espelha cadastro na base de Motorista (mesmo CPF)
+            if (_tambemMotorista && _form.DocumentoTipo == 1 && !IsEdicao && docLimpo.Length == 11)
+            {
+                try
+                {
+                    await MotoristaService.SalvarAsync(new MotoristaListItem
+                    {
+                        Cpf            = docLimpo,
+                        Nome           = _form.Nome,
+                        DataNascimento = _form.DataNascimento,
+                        Email          = _form.Email,
+                        Rntrc          = _form.Rntrc,
+                        RntrcSituacao  = _form.RntrcSituacao,
+                        TelefoneDdd    = _form.TelefoneDdd,
+                        TelefoneNumero = _form.TelefoneNumero,
+                    });
+                    Snackbar.Add("Favorecido + Motorista cadastrados.", Severity.Success);
+                }
+                catch (Exception exM)
+                {
+                    Snackbar.Add($"Favorecido OK, mas motorista falhou: {exM.Message}", Severity.Warning);
+                }
+            }
+            else
+            {
+                Snackbar.Add($"Favorecido {(IsEdicao ? "atualizado" : "cadastrado")} com sucesso!", Severity.Success);
+            }
             MudDialog.Close(DialogResult.Ok(salvo));
         }
         catch (Exception ex)
