@@ -152,7 +152,9 @@
 
     private async Task AbrirEdicao(FavorecidoListItem fav)
     {
-        var parameters = new DialogParameters { ["Original"] = fav };
+        // Lista local é minimal — buscar dados completos (endereço, data nasc, contas)
+        var completo = await Service.ObterAsync(fav.Documento) ?? fav;
+        var parameters = new DialogParameters { ["Original"] = completo };
         var dialog = await Dialog.ShowAsync<FavorecidoForm>("Editar Favorecido", parameters,
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
         var result = await dialog.Result;

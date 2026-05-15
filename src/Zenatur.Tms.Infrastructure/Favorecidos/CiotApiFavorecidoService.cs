@@ -117,6 +117,8 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
                 cidadeIbge      = int.TryParse(favorecido.EnderecoCidadeIbge, out var i) ? i : (int?)null,
                 telefoneDdd     = ddd,
                 telefoneNumero  = fone,
+                rntrc           = favorecido.Rntrc,
+                rntrcSituacao   = favorecido.RntrcSituacao,
             };
             var r = await _http.PutAsync<object, object>($"/api/v1/favorecidos/{favorecido.Documento}", updateBody, ct);
             if (r.IsFailed) throw new InvalidOperationException("Falha ao atualizar favorecido: " + string.Join("; ", r.Errors.Select(e => e.Message)));
