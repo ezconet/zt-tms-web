@@ -1,5 +1,7 @@
 @using Zenatur.Tms.Application.Veiculos
+@using Zenatur.Tms.Application.Domain
 @inject IVeiculoManagementService Service
+@inject IDomainService DomainService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -22,8 +24,13 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="4">
-                <MudTextField @bind-Value="_form.CategoriaVeiculo" Label="Categoria Pamcard" Variant="Variant.Outlined"
-                              HelperText="Código CategoriaVeiculo SEFAZ" Required="true" />
+                <MudSelect T="string" @bind-Value="_form.CategoriaVeiculo" Label="Categoria do Veículo"
+                           Variant="Variant.Outlined" Required="true">
+                    @foreach (var cat in _categorias)
+                    {
+                        <MudSelectItem Value="@cat.Codigo">@cat.Codigo — @cat.Descricao</MudSelectItem>
+                    }
+                </MudSelect>
             </MudItem>
             <MudItem xs="12" md="4">
                 <MudTextField @bind-Value="_form.Renavam" Label="Renavam" Variant="Variant.Outlined" />
@@ -78,8 +85,13 @@
     private string? _erro;
     private bool _salvando;
 
-    protected override void OnInitialized()
-        => _form = Original?.Clone() ?? new VeiculoListItem { TipoTracao = 1 };
+    private IReadOnlyList<DomainItem> _categorias = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _form = Original?.Clone() ?? new VeiculoListItem { TipoTracao = 1 };
+        _categorias = await DomainService.GetTiposVeiculoAsync();
+    }
 
     private async Task Salvar()
     {
