@@ -6,6 +6,7 @@
 @using Zenatur.Tms.Application.Composicoes
 @using Zenatur.Tms.Application.Domain
 @using Zenatur.Tms.Application.Favorecidos
+@using Zenatur.Tms.Application.Audit
 @using Zenatur.Tms.Application.LegacyBridge
 @using Zenatur.Tms.Application.Motoristas
 @using Zenatur.Tms.Application.State
@@ -15,6 +16,8 @@
 @inject IDomainService DomainService
 @inject IMotoristaManagementService MotoristaService
 @inject IFavorecidoManagementService FavorecidoService
+@inject IAuditClient Audit
+@inject IJSRuntime JS
 @inject CiotStateContainer State
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -927,6 +930,21 @@
                         <MudAlert Severity="Severity.Error" Dense="false" Icon="@Icons.Material.Filled.Error">
                             <strong>Falha ao emitir CIOT</strong>
                             <div style="margin-top:4px;">@_erroFase4</div>
+                            @if (!string.IsNullOrEmpty(_erroCorrelationId))
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                                    <MudText Typo="Typo.body2">
+                                        Código de rastreio:
+                                        <strong style="font-family:monospace;">@_erroCorrelationId</strong>
+                                    </MudText>
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                               StartIcon="@Icons.Material.Filled.ContentCopy"
+                                               OnClick="CopiarCodigoRastreio">Copiar</MudButton>
+                                    <MudText Typo="Typo.caption" Style="color:#6B7280;">
+                                        Envie este código à TI para análise.
+                                    </MudText>
+                                </MudStack>
+                            }
                         </MudAlert>
                     </MudItem>
                 }
@@ -1014,6 +1032,7 @@
     private string? _erroFase3viagem;
     private string? _erroFase3;
     private string? _erroFase4;
+    private string? _erroCorrelationId;
     private string? _protocoloEmitido;
     private FavorecidoDto? _favorecido;
 
@@ -1448,33 +1467,62 @@
 
         _buscandoMinuta = true;
         StateHasChanged();
+
+        var corr = CorrelationId.Novo();
+        var sw   = System.Diagnostics.Stopwatch.StartNew();
+        bool ok = false;
+        string? respJson = null, erro = null;
         try
         {
             var r = await Bridge.GetMinutaAsync(numero);
             if (r.IsFailed)
             {
-                _erroMinuta = "Falha ao consultar o legado. Tente novamente ou siga manualmente (Pular).";
+                erro = string.Join("; ", r.Errors.Select(e => e.Message));
+                _erroMinuta = $"Falha ao consultar o legado. Código de rastreio: {corr}. Tente novamente ou siga manualmente (Pular).";
                 return;
             }
             if (r.Value is null)
             {
+                erro = "404 — minuta não localizada";
                 _erroMinuta = $"Minuta {numero} não localizada no legado.";
                 return;
             }
 
-            _minuta = r.Value;
+            _minuta  = r.Value;
+            respJson = System.Text.Json.JsonSerializer.Serialize(r.Value);
+            ok       = true;
             await AplicarMinuta(_minuta);
             Snackbar.Add($"Minuta {numero} recuperada. Confira os dados e avance.", Severity.Success);
         }
         catch (Exception ex)
         {
-            _erroMinuta = $"Erro ao buscar minuta: {ex.Message}";
+            erro = ex.ToString();
+            _erroMinuta = $"Erro ao buscar minuta: {ex.Message}. Código de rastreio: {corr}.";
         }
         finally
         {
+            sw.Stop();
             _buscandoMinuta = false;
+            await Audit.LogAsync(new AuditEvent(
+                CorrelationId:   corr,
+                Operation:       "MinutaConsulta",
+                Sucesso:         ok,
+                ContratanteCnpj: _vm.ContratanteCnpj,
+                ReferenciaChave: numero,
+                RequestJson:     $"{{\"numeroMinuta\":\"{numero}\"}}",
+                ResponseJson:    respJson,
+                ErroMensagem:    erro,
+                DuracaoMs:       (int)sw.ElapsedMilliseconds));
             StateHasChanged();
         }
+    }
+
+    private async Task CopiarCodigoRastreio()
+    {
+        if (string.IsNullOrEmpty(_erroCorrelationId)) return;
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", _erroCorrelationId); }
+        catch { /* clipboard indisponível — usuário copia manualmente */ }
+        Snackbar.Add($"Código {_erroCorrelationId} copiado.", Severity.Info);
     }
 
     private void PularBusca()
@@ -2044,8 +2092,14 @@
     {
         _emitindo  = true;
         _erroFase4 = null;
+        _erroCorrelationId = null;
         StateHasChanged();
 
+        var corr = CorrelationId.Novo();
+        var sw   = System.Diagnostics.Stopwatch.StartNew();
+        bool emitOk = false;
+        string? reqJson = null, respJson = null, erroAudit = null;
+        int? pamCod = null;
         try
         {
             // Pamcard: 1=CNPJ, 2=CPF (mesma convenção do bug 1.13)
@@ -2055,6 +2109,8 @@
             if (_favorecido?.DataNascimento is null)
             {
                 _erroFase4 = "Data de nascimento do favorecido não informada. Edite o favorecido na Fase 1.";
+                erroAudit  = _erroFase4;
+                _erroCorrelationId = corr;
                 _emitindo = false;
                 StateHasChanged();
                 return;
@@ -2062,6 +2118,8 @@
             if (string.IsNullOrWhiteSpace(_favorecido.TelefoneDdd) || string.IsNullOrWhiteSpace(_favorecido.TelefoneNumero))
             {
                 _erroFase4 = "Telefone do favorecido não informado. Edite o favorecido na Fase 1.";
+                erroAudit  = _erroFase4;
+                _erroCorrelationId = corr;
                 _emitindo = false;
                 StateHasChanged();
                 return;
@@ -2103,11 +2161,15 @@
                 }).ToList(),
             };
 
+            reqJson = System.Text.Json.JsonSerializer.Serialize(request);
+
             var result = await CiotClient.Viagem.InsertTripAsync(request);
 
             if (result.IsFailed)
             {
                 _erroFase4 = string.Join("; ", result.Errors.Select(e => e.Message));
+                erroAudit  = _erroFase4;
+                _erroCorrelationId = corr;
                 Snackbar.Add("Falha na emissão — verifique os detalhes.", Severity.Error);
                 return;
             }
@@ -2116,6 +2178,8 @@
             _protocoloEmitido = $"{ok.ViagemId}-{ok.ViagemDigito}";
             _vm.CiotProtocolo = _protocoloEmitido;
             _vm.CiotNumero    = ok.ViagemId;
+            respJson = System.Text.Json.JsonSerializer.Serialize(ok);
+            emitOk   = true;
             Snackbar.Add("CIOT emitido com sucesso!", Severity.Success);
 
             // Emissão concluída — descarta o rascunho do state para que reentrar
@@ -2126,11 +2190,25 @@
         catch (Exception ex)
         {
             _erroFase4 = $"Erro inesperado: {ex.Message}";
+            erroAudit  = ex.ToString();
+            _erroCorrelationId = corr;
             Snackbar.Add("Erro inesperado na emissão.", Severity.Error);
         }
         finally
         {
+            sw.Stop();
             _emitindo = false;
+            await Audit.LogAsync(new AuditEvent(
+                CorrelationId:   corr,
+                Operation:       "InsertTrip",
+                Sucesso:         emitOk,
+                ContratanteCnpj: _vm.ContratanteCnpj,
+                ReferenciaChave: _vm.FavorecidoDocumento,
+                RequestJson:     reqJson,
+                ResponseJson:    respJson,
+                PamcardCodigo:   pamCod,
+                ErroMensagem:    erroAudit,
+                DuracaoMs:       (int)sw.ElapsedMilliseconds));
             StateHasChanged();
         }
     }
@@ -2148,6 +2226,7 @@
         _fontesDados      = [];
         _protocoloEmitido = null;
         _erroFase1 = _erroFase2 = _erroFase3 = _erroFase4 = null;
+        _erroCorrelationId = null;
         _faseIndex = 0;
         State.IniciarEmissao(_vm);
     }

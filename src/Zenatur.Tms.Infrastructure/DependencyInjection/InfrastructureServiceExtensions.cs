@@ -45,6 +45,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IComposicaoManagementService, CiotApiComposicaoService>();
         services.AddScoped<IFinanceiroService,      CiotApiFinanceiroService>();
         services.AddScoped<IDomainService,          CiotApiDomainService>();
+        services.AddScoped<Zenatur.Tms.Application.Audit.IAuditClient, Zenatur.Tms.Infrastructure.Audit.HttpAuditClient>();
 
         // IPamcardFavorecidoService removido em A13 — Pamcard é detalhe interno da CIOT API.
         // Segunda fonte do merge (LegacyBridge) entra em A14-A17.
