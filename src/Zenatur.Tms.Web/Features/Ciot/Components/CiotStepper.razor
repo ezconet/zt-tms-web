@@ -14,7 +14,7 @@
 @inject ILegacyBridgeClient Bridge
 @inject IDomainService DomainService
 @inject IMotoristaManagementService MotoristaService
-@inject IComposicaoManagementService ComposicaoService
+@inject IFavorecidoManagementService FavorecidoService
 @inject CiotStateContainer State
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -85,23 +85,47 @@
                         </MudText>
                         <MudDivider Class="my-2" />
                         <MudGrid Spacing="2">
+                            @{
+                                var mf = _minuta.Favorecido;
+                                var mm = _minuta.Motorista;
+                                var mv = _minuta.Veiculo;
+                                var mdocs = _minuta.Documentos ?? [];
+                                var mpts  = _minuta.PontosParada ?? [];
+                                var favCompleto = mf is not null
+                                    && mf.DataNascimento is not null
+                                    && mf.Endereco is not null
+                                    && !string.IsNullOrWhiteSpace(mf.Endereco.Logradouro)
+                                    && !string.IsNullOrWhiteSpace(mf.Endereco.Bairro)
+                                    && !string.IsNullOrWhiteSpace(mf.Endereco.Uf)
+                                    && !string.IsNullOrWhiteSpace(mf.Endereco.Cep)
+                                    && !string.IsNullOrWhiteSpace(mf.TelefoneDdd)
+                                    && !string.IsNullOrWhiteSpace(mf.TelefoneNumero);
+                                var motCompleto = mm is not null
+                                    && !string.IsNullOrWhiteSpace(mm.CnhNumero)
+                                    && !string.IsNullOrWhiteSpace(mm.CnhCategoria)
+                                    && !string.IsNullOrWhiteSpace(mm.RgNumero)
+                                    && !string.IsNullOrWhiteSpace(mm.RgUf);
+                                var veicCompleto = mv is not null && !string.IsNullOrWhiteSpace(mv.Placa);
+                                var odCompleto = _minuta.Origem?.Ibge is not null && _minuta.Destino?.Ibge is not null;
+                            }
                             <MudItem xs="12" md="6">@ResumoBloco("Favorecido",
-                                _minuta.Favorecido is null ? null : $"{_minuta.Favorecido.Nome} · {_minuta.Favorecido.Documento}")</MudItem>
+                                mf is null ? null : $"{mf.Nome} · {mf.Documento}", favCompleto)</MudItem>
                             <MudItem xs="12" md="6">@ResumoBloco("Motorista",
-                                _minuta.Motorista is null ? null : $"{_minuta.Motorista.Nome} · {_minuta.Motorista.Cpf}")</MudItem>
+                                mm is null ? null : $"{mm.Nome} · {mm.Cpf}", motCompleto)</MudItem>
                             <MudItem xs="12" md="6">@ResumoBloco("Veículo",
-                                _minuta.Veiculo is null ? null : _minuta.Veiculo.Placa +
-                                (_minuta.Veiculo.Reboques.Count > 0 ? $" +{_minuta.Veiculo.Reboques.Count} reb." : ""))</MudItem>
+                                mv is null ? null : mv.Placa +
+                                ((mv.Reboques?.Count ?? 0) > 0 ? $" +{mv.Reboques!.Count} reb." : ""), veicCompleto)</MudItem>
                             <MudItem xs="12" md="6">@ResumoBloco("Documentos",
-                                _minuta.Documentos.Count == 0 ? null : $"{_minuta.Documentos.Count} doc(s): " +
-                                string.Join(", ", _minuta.Documentos.Select(d => $"{d.Tipo} {d.Numero}")))</MudItem>
+                                mdocs.Count == 0 ? null : $"{mdocs.Count} doc(s): " +
+                                string.Join(", ", mdocs.Select(d => $"{d.Tipo} {d.Numero}")), mdocs.Count > 0)</MudItem>
                             <MudItem xs="12" md="6">@ResumoBloco("Origem → Destino",
                                 (_minuta.Origem is null || _minuta.Destino is null) ? null :
-                                $"{_minuta.Origem.Cidade}/{_minuta.Origem.Uf} → {_minuta.Destino.Cidade}/{_minuta.Destino.Uf}")</MudItem>
+                                $"{_minuta.Origem.Cidade}/{_minuta.Origem.Uf} → {_minuta.Destino.Cidade}/{_minuta.Destino.Uf}", odCompleto)</MudItem>
                             <MudItem xs="12" md="6">@ResumoBloco("Pontos de Parada",
-                                _minuta.PontosParada.Count == 0 ? null : $"{_minuta.PontosParada.Count} ponto(s)")</MudItem>
+                                mpts.Count == 0 ? "rota direta (sem paradas)" : $"{mpts.Count} ponto(s)", true)</MudItem>
                             <MudItem xs="12" md="6">@ResumoBloco("Valor Frete (legado)",
-                                _minuta.ValorFreteLegado is decimal vf ? vf.ToString("C", _culturaBr) : null)</MudItem>
+                                _minuta.ValorFreteLegado is decimal vf ? vf.ToString("C", _culturaBr) : null,
+                                _minuta.ValorFreteLegado is not null)</MudItem>
                         </MudGrid>
                         <MudDivider Class="my-3" />
                         <MudText Typo="Typo.caption" Style="color:#6B7280;">
@@ -342,6 +366,27 @@
         <MudGrid Spacing="3" Class="mt-2">
 
             <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_vm.VeiculoPlaca" @bind-Value:after="OnPlacaChanged"
+                              Label="Placa do Veículo (Cavalo)"
+                              Variant="Variant.Outlined"
+                              Placeholder="ABC1D23 ou ABC-1D23"
+                              HelperText="Mercosul (ABC1D23) ou antigo (ABC1234)"
+                              Immediate="true"
+                              Required="true" />
+                @if (_vm.ReboquesPlacas.Count > 0)
+                {
+                    <div class="d-flex align-center mt-1" style="flex-wrap:wrap;">
+                        <MudText Typo="Typo.caption" Style="color:#6B7280;">Reboques:&nbsp;</MudText>
+                        @foreach (var rp in _vm.ReboquesPlacas)
+                        {
+                            <MudChip T="string" Size="Size.Small" Label="true"
+                                     Style="background:#FEF3C7;color:#92400E;font-size:11px;font-family:monospace;">Placa: @rp</MudChip>
+                        }
+                    </div>
+                }
+            </MudItem>
+
+            <MudItem xs="12" md="6">
                 <MudSelect T="string" @bind-Value="_vm.TipoVeiculo"
                            Label="Tipo de Veículo"
                            Variant="Variant.Outlined"
@@ -361,57 +406,14 @@
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                             <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Style="color:#92400E; font-size:16px;" />
                             <MudText Typo="Typo.caption" Style="color:#92400E;">
-                                <strong>Bridge sugere:</strong>
+                                <strong>Sistema sugere:</strong>
                                 @_tipoVeiculoBridgeSugestao.Descricao
-                                <span style="opacity:0.7;">(id legado @_tipoVeiculoBridgeSugestao.Id)</span>
-                                — escolha o equivalente SEFAZ acima
+                                — escolha o equivalente SEFAZ
                             </MudText>
                         </MudStack>
                     </MudPaper>
                 }
             </MudItem>
-
-            <MudItem xs="12">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                    <MudAutocomplete T="ComposicaoListItem"
-                                     Value="_composicaoSelecionada"
-                                     ValueChanged="OnComposicaoSelecionada"
-                                     SearchFunc="BuscarComposicoes"
-                                     ToStringFunc="@(c => c is null ? string.Empty : $"{c.Nome} — {c.TracionantePlaca}" + (c.Reboques.Count > 0 ? $" +{c.Reboques.Count} reb." : ""))"
-                                     Label="Composição cadastrada (opcional)"
-                                     Variant="Variant.Outlined"
-                                     Clearable="true"
-                                     MinCharacters="0"
-                                     DebounceInterval="200"
-                                     HelperText="Selecione composição salva para auto-preencher cavalo + reboques"
-                                     Style="flex:1;" />
-                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.Add"
-                               OnClick="AbrirNovaComposicao">Nova</MudButton>
-                </MudStack>
-            </MudItem>
-
-            <MudItem xs="12" md="6">
-                <MudTextField @bind-Value="_vm.VeiculoPlaca" @bind-Value:after="OnPlacaChanged"
-                              Label="Placa do Veículo (Cavalo)"
-                              Variant="Variant.Outlined"
-                              Placeholder="ABC1D23 ou ABC-1D23"
-                              HelperText="Mercosul — ou selecione composição acima"
-                              Immediate="true"
-                              Required="true" />
-            </MudItem>
-
-            @if (_vm.ReboquesPlacas.Count > 0)
-            {
-                <MudItem xs="12" md="6" Class="d-flex align-center">
-                    <MudText Typo="Typo.caption" Style="color:#6B7280;">Reboques:&nbsp;</MudText>
-                    @foreach (var rp in _vm.ReboquesPlacas)
-                    {
-                        <MudChip T="string" Size="Size.Small" Label="true"
-                                 Style="background:#FEF3C7;color:#92400E;font-size:11px;font-family:monospace;">@rp</MudChip>
-                    }
-                </MudItem>
-            }
 
             <MudItem xs="12" md="6">
                 <MudSelect T="string" @bind-Value="_vm.TipoCarga" @bind-Value:after="OnTipoCargaChanged"
@@ -787,6 +789,15 @@
                         <MudSelectItem Value="@mp.Identificador">@($"{mp.Tipo} — {mp.Descricao}")</MudSelectItem>
                     }
                 </MudSelect>
+                @if (_meiosFavorecido.Count == 0)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                               Class="mt-1"
+                               StartIcon="@Icons.Material.Filled.AccountBalanceWallet"
+                               OnClick="AbrirCadastroMeioPagamento">
+                        Cadastrar conta / Pix do favorecido
+                    </MudButton>
+                }
             </MudItem>
 
             <MudItem xs="12" md="3">
@@ -944,7 +955,7 @@
                             Emissão Confirmada
                         </MudText>
                         <MudText Typo="Typo.body2" Style="color:#047857; margin-top:4px;">
-                            CIOT gerado com sucesso. Sincronização com base legada em andamento (background via Outbox).
+                            CIOT gerado com sucesso.
                         </MudText>
 
                         <MudPaper Elevation="0" Class="pa-3 mt-4" Style="background:white; border-radius:8px; display:inline-block;">
@@ -1051,6 +1062,7 @@
     // ── Fase 3: cultura BR para formatação + meios do favorecido ──
     private static readonly System.Globalization.CultureInfo _culturaBr = new("pt-BR");
     private IReadOnlyList<MeioPagamentoDto> _meiosFavorecido = [];
+    private List<ContaBancariaItem> _contasLocais = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -1225,6 +1237,74 @@
         {
             _buscando = false;
         }
+
+        // Minuta como fallback: re-busca (ex.: ao entrar na Identificação) não
+        // pode descartar dados do legado já recuperados.
+        var minutaFav = _minuta?.Favorecido;
+        if (minutaFav is not null &&
+            new string(minutaFav.Documento.Where(char.IsDigit).ToArray()) == documento)
+        {
+            EnriquecerFavorecidoComMinuta(minutaFav);
+        }
+
+        // Cadastro local é autoritativo (usuário pode tê-lo completado nesta
+        // sessão). Merge: local > CIOT/Bridge find > minuta.
+        await MesclarCadastroLocalAsync(documento);
+    }
+
+    // Sobrepõe ao _favorecido os campos preenchidos no cadastro local CIOT e
+    // expõe as contas/Pix locais como meios de pagamento (Pamcard FindFavored
+    // nem sempre traz meios; o cadastro local sim).
+    private async Task MesclarCadastroLocalAsync(string documento)
+    {
+        FavorecidoListItem? local;
+        try { local = await FavorecidoService.ObterAsync(documento); }
+        catch { return; }
+        if (local is null) return;
+
+        static string? Pref(string? prefer, string? fallback) =>
+            string.IsNullOrWhiteSpace(prefer) ? fallback : prefer;
+
+        var baseDto = _favorecido ?? new FavorecidoDto { Documento = documento };
+        _favorecido = baseDto with
+        {
+            Nome               = Pref(local.Nome, baseDto.Nome) ?? string.Empty,
+            Rntrc              = Pref(local.Rntrc, baseDto.Rntrc) ?? string.Empty,
+            RntrcSituacao      = Pref(local.RntrcSituacao, baseDto.RntrcSituacao) ?? string.Empty,
+            DataNascimento     = local.DataNascimento ?? baseDto.DataNascimento,
+            TelefoneDdd        = Pref(local.TelefoneDdd, baseDto.TelefoneDdd),
+            TelefoneNumero     = Pref(local.TelefoneNumero, baseDto.TelefoneNumero),
+            EnderecoLogradouro = Pref(local.EnderecoLogradouro, baseDto.EnderecoLogradouro),
+            EnderecoNumero     = Pref(local.EnderecoNumero,     baseDto.EnderecoNumero),
+            EnderecoBairro     = Pref(local.EnderecoBairro,     baseDto.EnderecoBairro),
+            EnderecoCidadeIbge = Pref(local.EnderecoCidadeIbge, baseDto.EnderecoCidadeIbge),
+            EnderecoUf         = Pref(local.EnderecoUf,         baseDto.EnderecoUf),
+            EnderecoCep        = Pref(local.EnderecoCep,        baseDto.EnderecoCep),
+        };
+
+        _vm.FavorecidoNome  = _favorecido.Nome;
+        _vm.FavorecidoRntrc = _favorecido.Rntrc;
+
+        // Contas/Pix do cadastro local → meios de pagamento selecionáveis
+        _contasLocais = local.Contas.ToList();
+        if (local.Contas.Count > 0)
+        {
+            var locais = local.Contas.Select((c, i) =>
+            {
+                var pix = !string.IsNullOrWhiteSpace(c.PixChave);
+                return new MeioPagamentoDto(
+                    pix ? "Pix" : "Conta",
+                    pix ? $"Pix {c.PixTipo}: {c.PixChave}"
+                        : $"Banco {c.Banco} Ag {c.Agencia} CC {c.Conta}",
+                    $"local-{i}");
+            }).ToList();
+
+            var combinados = _meiosFavorecido.ToList();
+            combinados.AddRange(locais);
+            _meiosFavorecido = combinados;
+        }
+
+        if (_erroFase1 is not null && _favorecido is not null) _erroFase1 = null;
     }
 
     private async Task OnStepperPreview(StepperInteractionEventArgs args)
@@ -1406,10 +1486,11 @@
 
     private async Task AplicarMinuta(MinutaViagemResponse m)
     {
-        // Documentos da viagem (NF / CT-e / etc)
-        if (m.Documentos.Count > 0)
+        // Documentos da viagem (NF / CT-e / etc). Chave pode vir omitida no legado.
+        var mDocumentos = m.Documentos ?? [];
+        if (mDocumentos.Count > 0)
         {
-            _vm.DocumentosViagem = m.Documentos
+            _vm.DocumentosViagem = mDocumentos
                 .Where(d => !string.IsNullOrWhiteSpace(d.Numero))
                 .Select(d => new DocumentoViagemViewModel { Tipo = d.TipoCodigo, Numero = d.Numero })
                 .ToList();
@@ -1429,8 +1510,8 @@
             _vm.DestinoDescricao = _destinoSelecionada?.Descricao ?? $"{m.Destino.Cidade}/{m.Destino.Uf}";
         }
 
-        // Pontos de parada
-        _vm.PontosParada = m.PontosParada
+        // Pontos de parada (chave pode vir omitida → rota direta)
+        _vm.PontosParada = (m.PontosParada ?? [])
             .OrderBy(p => p.Ordem)
             .Select(p => new PontoParadaViewModel
             {
@@ -1453,8 +1534,8 @@
         if (m.Veiculo is not null && string.IsNullOrEmpty(_vm.VeiculoPlaca))
         {
             _vm.VeiculoPlaca = m.Veiculo.Placa.Replace("-", "").ToUpperInvariant();
-            if (m.Veiculo.Reboques.Count > 0)
-                _vm.ReboquesPlacas = m.Veiculo.Reboques
+            if ((m.Veiculo.Reboques?.Count ?? 0) > 0)
+                _vm.ReboquesPlacas = m.Veiculo.Reboques!
                     .OrderBy(r => r.Ordem)
                     .Select(r => r.Placa.Replace("-", "").ToUpperInvariant())
                     .ToList();
@@ -1477,8 +1558,47 @@
         if (m.Favorecido is not null && !string.IsNullOrWhiteSpace(m.Favorecido.Documento))
         {
             _documentoBusca = m.Favorecido.Documento;
-            await BuscarFavorecido(m.Favorecido.Documento);
+            await BuscarFavorecido(m.Favorecido.Documento); // enrich aplicado dentro
         }
+    }
+
+    // Minuta traz dados cadastrais do favorecido. Usa-os para preencher o que
+    // CIOT/Bridge não retornaram (ou cria o DTO quando não encontrado), evitando
+    // exigir reedição manual de dados que o legado já possui.
+    private void EnriquecerFavorecidoComMinuta(MinutaFavorecidoLegado f)
+    {
+        static string? Blank(string? a, string? b) => string.IsNullOrWhiteSpace(a) ? b : a;
+
+        var e = f.Endereco;
+        var baseDto = _favorecido ?? new FavorecidoDto
+        {
+            Documento     = f.Documento,
+            Nome          = f.Nome,
+            Rntrc         = f.Rntrc ?? string.Empty,
+            RntrcSituacao = string.Empty,
+        };
+
+        _favorecido = baseDto with
+        {
+            Nome               = Blank(baseDto.Nome, f.Nome) ?? string.Empty,
+            Rntrc              = Blank(baseDto.Rntrc, f.Rntrc) ?? string.Empty,
+            DataNascimento     = baseDto.DataNascimento ?? f.DataNascimento,
+            TelefoneDdd        = Blank(baseDto.TelefoneDdd, f.TelefoneDdd),
+            TelefoneNumero     = Blank(baseDto.TelefoneNumero, f.TelefoneNumero),
+            EnderecoLogradouro = Blank(baseDto.EnderecoLogradouro, e?.Logradouro),
+            EnderecoNumero     = Blank(baseDto.EnderecoNumero,     e?.Numero),
+            EnderecoBairro     = Blank(baseDto.EnderecoBairro,     e?.Bairro),
+            EnderecoUf         = Blank(baseDto.EnderecoUf,         e?.Uf),
+            EnderecoCep        = Blank(baseDto.EnderecoCep,        e?.Cep),
+        };
+
+        _vm.FavorecidoDocumento = f.Documento;
+        _vm.FavorecidoNome      = _favorecido.Nome;
+        _vm.FavorecidoRntrc     = _favorecido.Rntrc;
+
+        // Favorecido reconstituído da minuta → libera avanço (erro de "não
+        // encontrado" não se aplica: temos os dados do legado).
+        if (_erroFase1 is not null) _erroFase1 = null;
     }
 
     private void AdicionarPontoParada()
@@ -1552,6 +1672,19 @@
             EnderecoUf         = _favorecido.EnderecoUf,
             EnderecoCep        = _favorecido.EnderecoCep,
         };
+
+        // Carrega contas/Pix já salvas no cadastro local para não sobrescrever.
+        try
+        {
+            var jaSalvo = await FavorecidoService.ObterAsync(docDigits);
+            if (jaSalvo is not null)
+            {
+                prefil.Contas = jaSalvo.Contas.Select(c => c.Clone()).ToList();
+                prefil.Email  = jaSalvo.Email;
+            }
+        }
+        catch { /* segue com prefil do _favorecido */ }
+
         var parameters = new DialogParameters { ["Original"] = prefil };
         var dialog = await DialogService.ShowAsync<FavorecidoForm>("Editar Favorecido", parameters,
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
@@ -1579,40 +1712,16 @@
         }
     }
 
-    private ComposicaoListItem? _composicaoSelecionada;
-
-    private async Task<IEnumerable<ComposicaoListItem>> BuscarComposicoes(string? termo, CancellationToken ct)
+    // Cadastrar conta/Pix: reusa o FavorecidoForm (gerencia Contas) e re-mescla
+    // o cadastro local para refletir os meios recém-criados na Fase Valores.
+    private async Task AbrirCadastroMeioPagamento()
     {
-        var lista = await ComposicaoService.ListarAsync();
-        if (string.IsNullOrWhiteSpace(termo)) return lista;
-        var t = termo.Trim();
-        return lista.Where(c =>
-            c.Nome.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-            c.TracionantePlaca.Contains(t, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private void OnComposicaoSelecionada(ComposicaoListItem? c)
-    {
-        _composicaoSelecionada = c;
-        if (c is null)
-        {
-            _vm.ReboquesPlacas = [];
-            return;
-        }
-        _vm.VeiculoPlaca   = c.TracionantePlaca;
-        _vm.ReboquesPlacas = c.Reboques.OrderBy(r => r.Ordem).Select(r => r.Placa).ToList();
-        Snackbar.Add($"Composição '{c.Nome}' aplicada: cavalo {c.TracionantePlaca} + {c.Reboques.Count} reboque(s).", Severity.Success);
-    }
-
-    private async Task AbrirNovaComposicao()
-    {
-        var dialog = await DialogService.ShowAsync<ComposicaoForm>("Nova Composição",
-            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
-        var result = await dialog.Result;
-        if (result is { Canceled: false, Data: ComposicaoListItem nova })
-        {
-            OnComposicaoSelecionada(nova);
-        }
+        await AbrirEdicaoFavorecido();
+        var doc = new string((_vm.FavorecidoDocumento ?? "").Where(char.IsDigit).ToArray());
+        if (!string.IsNullOrEmpty(doc))
+            await MesclarCadastroLocalAsync(doc);
+        if (_meiosFavorecido.Count == 0)
+            Snackbar.Add("Nenhuma conta/Pix cadastrada ainda. Adicione no formulário do favorecido.", Severity.Info);
     }
 
     // Monta lista favorecidos do InsertTrip. PF puro → 1 favorecido.
@@ -1621,7 +1730,9 @@
     {
         var titular = new FavorecidoItem
         {
-            Tipo = docTipo,
+            // Tabela 15 TipoFavorecido: 1=CONTRATADO (favorecido pago no CIOT),
+            // 2=SUB CONTRATANTE, 3=MOTORISTA. NÃO é tipo de documento.
+            Tipo = 1,
             Nome = _vm.FavorecidoNome ?? string.Empty,
             Documentos =
             [
@@ -1638,6 +1749,9 @@
             EnderecoCep        = _favorecido.EnderecoCep,
         };
 
+        // Método de pagamento do favorecido (Pamcard exige conta OU Pix OU cartão)
+        titular = AplicarMeioPagamento(titular);
+
         // Favorecido PJ (CNPJ, docTipo=1 Pamcard) → vincula condutor PF responsável pelo consumo
         if (_vm.FavorecidoDocumento?.Length == 14 &&
             !string.IsNullOrWhiteSpace(_vm.MotoristaCpf))
@@ -1650,6 +1764,53 @@
         }
 
         return [titular];
+    }
+
+    // Pamcard Tabela 42 chave Pix: 1=CPF/CNPJ 2=E-mail 3=Celular 4=Aleatória
+    private static int? MapPixTipo(string? t) => t?.ToUpperInvariant() switch
+    {
+        "CPF" or "CNPJ" => 1,
+        "EMAIL"         => 2,
+        "CELULAR"       => 3,
+        "ALEATORIA"     => 4,
+        _               => null,
+    };
+
+    private FavorecidoItem AplicarMeioPagamento(FavorecidoItem fav)
+    {
+        var id = _vm.MeioPagamento;
+        if (string.IsNullOrWhiteSpace(id)) return fav;
+
+        // Meio do cadastro local ("local-{i}") → preenche conta/Pix
+        if (id.StartsWith("local-", StringComparison.Ordinal) &&
+            int.TryParse(id.AsSpan(6), out var ix) &&
+            ix >= 0 && ix < _contasLocais.Count)
+        {
+            var c = _contasLocais[ix];
+            // R34: Conta Depósito = meio.pagamento 2 (vale p/ conta OU Pix)
+            if (!string.IsNullOrWhiteSpace(c.PixChave))
+            {
+                return fav with
+                {
+                    MeioPagamento = "2",
+                    ChavePixTipo  = MapPixTipo(c.PixTipo),
+                    ChavePix      = c.PixChave,
+                };
+            }
+
+            var bancoNum = int.TryParse(new string((c.Banco ?? "").Where(char.IsDigit).ToArray()), out var b) ? b : (int?)null;
+            return fav with
+            {
+                MeioPagamento = "2",
+                ContaBanco   = bancoNum,
+                ContaAgencia = string.IsNullOrWhiteSpace(c.Agencia) ? null : c.Agencia,
+                ContaNumero  = string.IsNullOrWhiteSpace(c.Conta) ? null : c.Conta,
+                ContaTipo    = c.Tipo == "CP" ? 2 : 1,
+            };
+        }
+
+        // Meio vindo do Pamcard FindFavored → passa o identificador
+        return fav with { MeioPagamento = id };
     }
 
     private async Task BuscarMotoristaPj()
@@ -1928,10 +2089,17 @@
                     Tipo   = d.Tipo,
                     Numero = d.Numero,
                 }).ToList(),
-                Parcelas = _vm.Parcelas.Select(p => new ParcelaItem
+                Parcelas = _vm.Parcelas.Select((p, idx) => new ParcelaItem
                 {
                     Data  = DateOnly.FromDateTime(p.Vencimento),
                     Valor = p.Valor,
+                    // Tabela 8 TipoEfetivacao: 1=MANUAL 2=AUTOMATICA 4=QUITACAO
+                    EfetivacaoTipo = 1,
+                    // Tabela 5 TipoParcela: 1=ADIANTAMENTO 2=INTERMEDIARIA 3=SALDO FINAL
+                    Tipo  = _vm.Parcelas.Count == 1      ? 3
+                          : idx == 0                     ? 1
+                          : idx == _vm.Parcelas.Count - 1 ? 3
+                          :                                 2,
                 }).ToList(),
             };
 
@@ -1949,6 +2117,11 @@
             _vm.CiotProtocolo = _protocoloEmitido;
             _vm.CiotNumero    = ok.ViagemId;
             Snackbar.Add("CIOT emitido com sucesso!", Severity.Success);
+
+            // Emissão concluída — descarta o rascunho do state para que reentrar
+            // no menu "Emissor CIOT" comece um formulário limpo. A tela de
+            // sucesso continua usando _vm/_protocoloEmitido locais.
+            State.Limpar();
         }
         catch (Exception ex)
         {
@@ -2039,16 +2212,20 @@
 
 @* helper de linha de revisão *@
 @code {
-    private RenderFragment ResumoBloco(string Label, string? Valor) => __builder =>
+    private RenderFragment ResumoBloco(string Label, string? Valor, bool Completo) => __builder =>
     {
-        var ok = !string.IsNullOrWhiteSpace(Valor);
+        var temValor = !string.IsNullOrWhiteSpace(Valor);
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-            <MudIcon Icon="@(ok ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
-                     Style="@($"font-size:18px; color:{(ok ? "#10B981" : "#D97706")};")" />
+            <MudIcon Icon="@(Completo ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
+                     Style="@($"font-size:18px; color:{(Completo ? "#10B981" : "#D97706")};")" />
             <div>
                 <MudText Typo="Typo.caption" Style="color:#6B7280;">@Label</MudText>
                 <MudText Typo="Typo.body2" Style="color:#111827; font-weight:500;">
-                    @(ok ? Valor : "completar manualmente")
+                    @(temValor ? Valor : "completar manualmente")
+                    @if (temValor && !Completo)
+                    {
+                        <span style="color:#D97706;"> (incompleto)</span>
+                    }
                 </MudText>
             </div>
         </MudStack>

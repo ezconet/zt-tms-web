@@ -8,7 +8,7 @@ public class EmissaoViewModel
     public List<PontoParadaViewModel> PontosParada { get; set; } = [];
 
     // Fase 1 — Identificação
-    public string? ContratanteCnpj { get; set; }
+    public string? ContratanteCnpj { get; set; } = "53717120000170"; // Zenatur — user pode trocar
     public string? FavorecidoDocumento { get; set; }
     public string? FavorecidoNome { get; set; }
     public string? FavorecidoRntrc { get; set; }

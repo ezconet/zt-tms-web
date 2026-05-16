@@ -79,14 +79,14 @@
                 </MudSelect>
             </MudItem>
 
-            @if (_form.DocumentoTipo == 1)
+            @if (_form.DocumentoTipo == 1 && !IsEdicao)
             {
                 <MudItem xs="8" md="3">
                     <MudTextField @bind-Value="_form.RgNumero"
                                   Label="RG"
                                   Variant="Variant.Outlined"
                                   Required="true"
-                                  HelperText="Obrigatório PF (Pamcard)" />
+                                  HelperText="Obrigatório novo PF (Pamcard) — depois gerido no Motorista" />
                 </MudItem>
                 <MudItem xs="4" md="2">
                     <MudSelect T="string" @bind-Value="_form.RgUf" Label="UF RG" Variant="Variant.Outlined">
@@ -98,7 +98,7 @@
                 </MudItem>
             }
 
-            <MudItem xs="12" md="@(_form.DocumentoTipo == 1 ? 4 : 6)">
+            <MudItem xs="12" md="@(_form.DocumentoTipo == 1 && !IsEdicao ? 4 : 6)">
                 <MudTextField @bind-Value="_form.Email"
                               Label="E-mail"
                               Variant="Variant.Outlined"
@@ -246,6 +246,26 @@
                                                Color="Color.Error"
                                                Size="Size.Small"
                                                OnClick="@(() => _form.Contas.RemoveAt(idx))" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudSelect @bind-Value="conta.PixTipo"
+                                           T="string"
+                                           Label="Tipo Chave Pix (opcional)" Variant="Variant.Outlined"
+                                           Margin="Margin.Dense" Clearable="true">
+                                    <MudSelectItem Value="@("CPF")">CPF</MudSelectItem>
+                                    <MudSelectItem Value="@("CNPJ")">CNPJ</MudSelectItem>
+                                    <MudSelectItem Value="@("EMAIL")">E-mail</MudSelectItem>
+                                    <MudSelectItem Value="@("CELULAR")">Celular</MudSelectItem>
+                                    <MudSelectItem Value="@("ALEATORIA")">Aleatória</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" md="8">
+                                <MudTextField @bind-Value="conta.PixChave"
+                                              T="string"
+                                              Label="Chave Pix (opcional)" Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              HelperText="Banco OU Pix — pelo menos um" />
                             </MudItem>
                         </MudGrid>
                     </MudPaper>
@@ -396,8 +416,8 @@
         { _erro = "CEP é obrigatório (exigido pela Pamcard)."; return; }
         if (string.IsNullOrWhiteSpace(_form.EnderecoCidadeIbge))
         { _erro = "Selecione a Cidade."; return; }
-        if (_form.DocumentoTipo == 1 && string.IsNullOrWhiteSpace(_form.RgNumero))
-        { _erro = "RG é obrigatório para Pessoa Física (exigido pela Pamcard)."; return; }
+        if (_form.DocumentoTipo == 1 && !IsEdicao && string.IsNullOrWhiteSpace(_form.RgNumero))
+        { _erro = "RG é obrigatório para novo Pessoa Física (exigido pela Pamcard)."; return; }
 
         _form.DataNascimento = DateOnly.FromDateTime(_dataNascimento.Value);
 

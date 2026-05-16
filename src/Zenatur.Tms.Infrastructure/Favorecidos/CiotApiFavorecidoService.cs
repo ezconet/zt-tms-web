@@ -127,9 +127,67 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
             if (r.IsFailed) throw new InvalidOperationException("Falha ao atualizar favorecido: " + string.Join("; ", r.Errors.Select(e => e.Message)));
         }
 
+        await PersistirContasAsync(favorecido, ct);
+
         // Re-fetch pra refletir id + outros campos preenchidos pelo backend
         var atualizado = await ObterAsync(favorecido.Documento, ct);
         return atualizado ?? favorecido;
+    }
+
+    // Pamcard Tabela 42 — TipoChavePIX: 1=CPF/CNPJ, 2=E-mail, 3=Celular, 4=Aleatória
+    private static int? MapPixTipo(string? t) => t?.ToUpperInvariant() switch
+    {
+        "CPF"       => 1,
+        "CNPJ"      => 1,
+        "EMAIL"     => 2,
+        "CELULAR"   => 3,
+        "ALEATORIA" => 4,
+        _           => null,
+    };
+
+    private async Task PersistirContasAsync(FavorecidoListItem favorecido, CancellationToken ct)
+    {
+        if (favorecido.Contas.Count == 0) return;
+
+        // Pamcard doc tipo: 1=CNPJ, 2=CPF
+        var favDocTipo = favorecido.DocumentoTipo == 1 ? 2 : 1;
+
+        var erros = new List<string>();
+
+        foreach (var c in favorecido.Contas)
+        {
+            var bancoNum = int.TryParse(SoDigitos(c.Banco), out var b) && b > 0 ? b : (int?)null;
+            var temPix   = !string.IsNullOrWhiteSpace(c.PixChave);
+
+            // Backend exige Banco para persistir conta; Pix exige chave.
+            if (bancoNum is null && !temPix) continue;
+
+            var body = new
+            {
+                contratanteCnpj     = ContratanteCnpj,
+                favorecidoDocTipo   = favDocTipo,
+                favorecidoDocNumero = favorecido.Documento,
+                banco               = bancoNum,
+                agencia             = string.IsNullOrWhiteSpace(c.Agencia) ? null : c.Agencia,
+                contaNumero         = string.IsNullOrWhiteSpace(c.Conta) ? null : c.Conta,
+                contaTipo           = c.Tipo == "CP" ? 2 : 1,
+                chavePixTipo        = MapPixTipo(c.PixTipo),
+                chavePix            = temPix ? c.PixChave : null,
+            };
+
+            var r = await _http.PostAsync<object, object>("/api/v1/favorecidos/conta", body, ct);
+            if (r.IsFailed)
+            {
+                var msg = string.Join("; ", r.Errors.Select(e => e.Message));
+                _logger.LogWarning("Falha ao persistir conta favorecido {Doc}: {Errors}",
+                    favorecido.Documento, msg);
+                erros.Add(msg);
+            }
+        }
+
+        if (erros.Count > 0)
+            throw new InvalidOperationException(
+                "Favorecido salvo, mas a conta/Pix não foi aceita: " + string.Join(" | ", erros));
     }
 
     public async Task<bool> RemoverAsync(string documento, CancellationToken ct = default)
@@ -179,6 +237,10 @@ internal sealed class CiotApiFavorecidoService : IFavorecidoManagementService
             Conta    = c.numero ?? "",
             Tipo     = c.tipo == 1 ? "CC" : "CP",
             PixChave = c.chavePix,
+            PixTipo  = c.chavePixTipo switch
+            {
+                1 => "CPF", 2 => "EMAIL", 3 => "CELULAR", 4 => "ALEATORIA", _ => null,
+            },
         }).ToList(),
     };
 
