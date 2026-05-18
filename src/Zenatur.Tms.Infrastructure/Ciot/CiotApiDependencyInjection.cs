@@ -21,7 +21,8 @@ public static class CiotApiDependencyInjection
                 var opts = config.GetSection(CiotApiOptions.SectionName).Get<CiotApiOptions>()
                            ?? new CiotApiOptions();
                 if (!string.IsNullOrEmpty(opts.BaseUrl))
-                    http.BaseAddress = new Uri(opts.BaseUrl);
+                    // trailing "/" obrigatório p/ preservar sub-caminho (/ciotapi)
+                    http.BaseAddress = new Uri(opts.BaseUrl.TrimEnd('/') + "/");
                 http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
             })
             .AddHttpMessageHandler<ApiKeyDelegatingHandler>()

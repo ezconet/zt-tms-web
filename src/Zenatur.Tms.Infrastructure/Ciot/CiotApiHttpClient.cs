@@ -26,11 +26,15 @@ public sealed class CiotApiHttpClient
         _logger = logger;
     }
 
+    // Path com "/" inicial + BaseAddress com sub-caminho → RFC trata como
+    // absolute path e descarta o prefixo (/ciotapi). Sempre relativo.
+    private static string Rel(string url) => url.TrimStart('/');
+
     public async Task<Result<T>> GetAsync<T>(string url, CancellationToken ct = default)
     {
         try
         {
-            var response = await _http.GetAsync(url, ct);
+            var response = await _http.GetAsync(Rel(url), ct);
             return await ParseResponseAsync<T>(response, url, ct);
         }
         catch (Exception ex)
@@ -45,7 +49,7 @@ public sealed class CiotApiHttpClient
     {
         try
         {
-            var response = await _http.PostAsJsonAsync(url, body, _json, ct);
+            var response = await _http.PostAsJsonAsync(Rel(url), body, _json, ct);
             return await ParseResponseAsync<TResponse>(response, url, ct);
         }
         catch (Exception ex)
@@ -60,7 +64,7 @@ public sealed class CiotApiHttpClient
     {
         try
         {
-            var response = await _http.PutAsJsonAsync(url, body, _json, ct);
+            var response = await _http.PutAsJsonAsync(Rel(url), body, _json, ct);
             return await ParseResponseAsync<TResponse>(response, url, ct);
         }
         catch (Exception ex)
@@ -74,7 +78,7 @@ public sealed class CiotApiHttpClient
     {
         try
         {
-            var response = await _http.DeleteAsync(url, ct);
+            var response = await _http.DeleteAsync(Rel(url), ct);
             if (response.IsSuccessStatusCode) return Result.Ok();
             var raw = await response.Content.ReadAsStringAsync(ct);
             _logger.LogWarning("CIOT API DELETE erro {Status} em {Url}: {Body}", (int)response.StatusCode, url, raw);

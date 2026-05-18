@@ -18,7 +18,8 @@ public static class LegacyBridgeDependencyInjection
                 var opts = config.GetSection(LegacyBridgeOptions.SectionName).Get<LegacyBridgeOptions>()
                            ?? new LegacyBridgeOptions();
                 if (!string.IsNullOrEmpty(opts.BaseUrl))
-                    http.BaseAddress = new Uri(opts.BaseUrl);
+                    // trailing "/" preserva sub-caminho (/LegacyBridgeAPI)
+                    http.BaseAddress = new Uri(opts.BaseUrl.TrimEnd('/') + "/");
                 http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
             })
             .AddHttpMessageHandler<BridgeApiKeyHandler>()

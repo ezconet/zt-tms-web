@@ -46,7 +46,8 @@ internal sealed class HttpLegacyBridgeClient : ILegacyBridgeClient
     {
         try
         {
-            var response = await _http.GetAsync(url, ct);
+            // path relativo (sem "/" inicial) preserva sub-caminho da BaseAddress
+            var response = await _http.GetAsync(url.TrimStart('/'), ct);
             if (response.StatusCode == HttpStatusCode.NotFound)
                 return Result.Ok<T?>(null);
 
