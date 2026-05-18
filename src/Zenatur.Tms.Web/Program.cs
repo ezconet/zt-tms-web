@@ -21,8 +21,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     {
         // LoginPath: rota pública AllowAnonymous. NÃO pode ser /auth/external-login
         // (que é POST-only do legado) — loop infinito.
-        options.LoginPath         = "/auth/required";
-        options.AccessDeniedPath  = "/auth/required";
+        // Apresentação: se DevAutoLogin on, qualquer rota não autenticada
+        // cai no login silencioso (sem token/DevTools). Off = fluxo normal.
+        var loginPath = DevLoginEndpoint.Enabled(builder.Configuration)
+            ? DevLoginEndpoint.Path
+            : "/auth/required";
+        options.LoginPath         = loginPath;
+        options.AccessDeniedPath  = loginPath;
         options.ExpireTimeSpan    = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
     });
@@ -52,6 +57,10 @@ app.UseAntiforgery();
 
 app.MapPost("/auth/external-login", ExternalLoginEndpoint.Handle)
    .DisableAntiforgery()
+   .AllowAnonymous();
+
+// Login silencioso de apresentação (gated por Auth:DevAutoLogin).
+app.MapGet(DevLoginEndpoint.Path, DevLoginEndpoint.Handle)
    .AllowAnonymous();
 
 app.MapStaticAssets();
