@@ -12,7 +12,9 @@ public static class CiotApiDependencyInjection
         IConfiguration config)
     {
         services.Configure<CiotApiOptions>(config.GetSection(CiotApiOptions.SectionName));
+        services.AddSingleton<Zenatur.Tms.Application.Audit.CorrelationContext>();
         services.AddTransient<ApiKeyDelegatingHandler>();
+        services.AddTransient<CorrelationDelegatingHandler>();
 
         services.AddHttpClient<CiotApiHttpClient>((sp, http) =>
             {
@@ -23,6 +25,7 @@ public static class CiotApiDependencyInjection
                 http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
             })
             .AddHttpMessageHandler<ApiKeyDelegatingHandler>()
+            .AddHttpMessageHandler<CorrelationDelegatingHandler>()
             .AddPolicyHandler((sp, _) => BuildRetryPolicy(config))
             .AddPolicyHandler(BuildCircuitBreakerPolicy());
 

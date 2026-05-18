@@ -17,6 +17,7 @@
 @inject IMotoristaManagementService MotoristaService
 @inject IFavorecidoManagementService FavorecidoService
 @inject IAuditClient Audit
+@inject CorrelationContext Correlation
 @inject IJSRuntime JS
 @inject CiotStateContainer State
 @inject ISnackbar Snackbar
@@ -2153,6 +2154,8 @@
 
             reqJson = System.Text.Json.JsonSerializer.Serialize(request);
 
+            // Propaga o código ao CIOT → XML SOAP gravado lá sob o mesmo corr
+            Correlation.Current = corr;
             var result = await CiotClient.Viagem.InsertTripAsync(request);
 
             if (result.IsFailed)
@@ -2188,6 +2191,7 @@
         {
             sw.Stop();
             _emitindo = false;
+            Correlation.Current = null;
             await Audit.LogAsync(new AuditEvent(
                 CorrelationId:   corr,
                 Operation:       "InsertTrip",
