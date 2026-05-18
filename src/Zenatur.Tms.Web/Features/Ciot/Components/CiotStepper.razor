@@ -23,6 +23,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IWebHostEnvironment Env
+@inject IConfiguration Config
 
 <MudStepper @bind-ActiveIndex="_faseIndex"
             NonLinear="false"
@@ -297,9 +298,9 @@
                                 <MudItem xs="12">
                                     <MudAlert Severity="Severity.Warning" Dense="true">
                                         RNTRC inativo.
-                                        @if (Env.IsDevelopment())
+                                        @if (_rntrcBypass)
                                         {
-                                            <strong> Modo DEV: validação será ignorada para permitir testes.</strong>
+                                            <strong> Ambiente de teste: validação ignorada.</strong>
                                         }
                                         else
                                         {
@@ -1035,10 +1036,14 @@
     private List<string> _fontesDados = [];
     private bool _prioridadeBridge; // futuro A14-A17: priority quando Bridge entrar
 
+    // Bypass RNTRC inativo: dev sempre; ou via flag (homolog = ambiente teste).
+    private bool _rntrcBypass =>
+        Env.IsDevelopment() || Config.GetValue("Features:PermitirRntrcInativo", false);
+
     private bool _fase1Valida =>
         !string.IsNullOrWhiteSpace(_vm.ContratanteCnpj) &&
         _favorecido is not null &&
-        (_favorecido.RntrcAtivo || Env.IsDevelopment()); // dev bypass — bug 1.7
+        (_favorecido.RntrcAtivo || _rntrcBypass); // bug 1.7 + homolog
 
     private static readonly System.Text.RegularExpressions.Regex _placaRegex = new(
         @"^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$",
@@ -1360,14 +1365,13 @@
             }
             if (!_favorecido.RntrcAtivo)
             {
-                if (!Env.IsDevelopment())
+                if (!_rntrcBypass)
                 {
                     Snackbar.Add("RNTRC inativo — emissão não permitida.", Severity.Error);
                     args.Cancel = true;
                     return;
                 }
-                // Dev bypass — bug 1.7: legado sempre retorna ativo:null/false
-                Snackbar.Add("⚠ Modo DEV: RNTRC inativo ignorado.", Severity.Warning);
+                Snackbar.Add("⚠ Ambiente de teste: RNTRC inativo ignorado.", Severity.Warning);
             }
             State.AvancarFase();
         }
