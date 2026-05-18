@@ -5,6 +5,7 @@
     {
         // Página de bloqueio simples: o Silent Login real é POST do legado.
         // Aqui apenas mostra mensagem clara. No futuro, redirecionar para sistema legado.
-        Nav.NavigateTo("/auth/required", forceLoad: false);
+        // relativo: resolve contra <base href> (PathBase /tmsweb)
+        Nav.NavigateTo("auth/required", forceLoad: false);
     }
 }
