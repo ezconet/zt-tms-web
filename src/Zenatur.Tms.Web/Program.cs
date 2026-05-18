@@ -9,8 +9,12 @@ using Zenatur.Tms.Web.Localization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddRazorComponents(o => o.DetailedErrors = builder.Environment.IsDevelopment())
-    .AddInteractiveServerComponents(o => o.DetailedErrors = builder.Environment.IsDevelopment());
+// DetailedErrors: dev sempre; prod só se DetailedErrors=true (diagnóstico
+// homolog — "circuit failed to initialize" sem detalhe).
+var detailedErrors = builder.Environment.IsDevelopment()
+    || builder.Configuration.GetValue("DetailedErrors", false);
+builder.Services.AddRazorComponents(o => o.DetailedErrors = detailedErrors)
+    .AddInteractiveServerComponents(o => o.DetailedErrors = detailedErrors);
 
 builder.Services.AddMudServices();
 builder.Services.AddTransient<MudLocalizer, PtBrMudLocalizer>();
