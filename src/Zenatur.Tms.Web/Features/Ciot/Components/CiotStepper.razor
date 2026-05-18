@@ -741,15 +741,6 @@
                                  HelperText="Pedágios da rota" />
             </MudItem>
 
-            <MudItem xs="12" md="4">
-                <MudNumericField T="decimal" @bind-Value="_vm.ValorImpostos"
-                                 Label="Impostos / INSS (R$)"
-                                 Variant="Variant.Outlined"
-                                 Format="N2" Culture="@_culturaBr"
-                                 Min="0m" HideSpinButtons="false"
-                                 HelperText="Retenções a deduzir" />
-            </MudItem>
-
             @if (_vm.FreteMinimoAntt is decimal min2 && _vm.ValorFrete > 0 && _vm.ValorFrete < min2)
             {
                 <MudItem xs="12">
@@ -764,7 +755,7 @@
                           Style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:8px;">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
                         <MudText Typo="Typo.body2" Style="color:#6B7280;">
-                            Frete + Pedágio − Impostos
+                            Frete + Pedágio (impostos calculados pela Pamcard no fechamento)
                         </MudText>
                         <MudText Typo="Typo.h6" Style="color:#AD1F0B; font-weight:700;">
                             @_vm.ValorLiquido.ToString("C", _culturaBr)
@@ -903,7 +894,6 @@
                         <MudDivider Class="my-2" />
                         @ReviewRow("Frete",     _vm.ValorFrete.ToString("C", _culturaBr))
                         @ReviewRow("Pedágio",   _vm.ValorPedagio.ToString("C", _culturaBr))
-                        @ReviewRow("Impostos",  _vm.ValorImpostos.ToString("C", _culturaBr))
                         <MudDivider Class="my-2" />
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                             <MudText Typo="Typo.body2" Style="color:#374151; font-weight:600;">Valor Líquido</MudText>
@@ -1428,7 +1418,7 @@
             { _erroFase3 = "Valor do Frete deve ser maior que zero."; args.Cancel = true; return; }
 
             if (_vm.ValorLiquido <= 0)
-            { _erroFase3 = "Valor líquido (Frete + Pedágio − Impostos) deve ser positivo."; args.Cancel = true; return; }
+            { _erroFase3 = "Valor líquido (Frete + Pedágio) deve ser positivo."; args.Cancel = true; return; }
 
             if (string.IsNullOrEmpty(_vm.MeioPagamento))
             { _erroFase3 = "Selecione o Meio de Pagamento."; args.Cancel = true; return; }
@@ -2261,7 +2251,6 @@
         !string.IsNullOrEmpty(_vm.DestinoIbge)  ||
         _vm.ValorFrete    > 0 ||
         _vm.ValorPedagio  > 0 ||
-        _vm.ValorImpostos > 0 ||
         !string.IsNullOrEmpty(_vm.MeioPagamento);
 
     private void LimparDadosFasesPosteriores()
@@ -2277,7 +2266,6 @@
         _vm.DestinoDescricao = null;
         _vm.ValorFrete       = 0;
         _vm.ValorPedagio     = 0;
-        _vm.ValorImpostos    = 0;
         _vm.DataVencimento   = null;
         _vm.ParcelasQuantidade = 1;
         _vm.MeioPagamento    = null;

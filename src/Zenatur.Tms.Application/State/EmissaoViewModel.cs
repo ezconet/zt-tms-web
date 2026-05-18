@@ -32,7 +32,6 @@ public class EmissaoViewModel
     // Fase 3 — Valores e Parcelas
     public decimal ValorFrete         { get; set; }
     public decimal ValorPedagio       { get; set; }
-    public decimal ValorImpostos      { get; set; }
     public DateTime? DataVencimento   { get; set; }
     public int ParcelasQuantidade     { get; set; } = 1;
     public string? MeioPagamento      { get; set; }
@@ -50,7 +49,9 @@ public class EmissaoViewModel
     // Fase Viagem
     public DateTime? DataPartida { get; set; } = DateTime.Today;
 
-    public decimal ValorLiquido => ValorFrete + ValorPedagio - ValorImpostos;
+    // Impostos (INSS/IRRF/SEST-SENAT) calculados pela Pamcard no fechamento
+    // — não digitados nem deduzidos aqui.
+    public decimal ValorLiquido => ValorFrete + ValorPedagio;
 
     // Resultado (pós-emissão)
     public string? CiotNumero    { get; set; }
