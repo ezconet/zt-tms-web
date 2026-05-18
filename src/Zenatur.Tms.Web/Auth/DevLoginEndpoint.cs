@@ -22,8 +22,10 @@ public static class DevLoginEndpoint
         IUserService userService,
         IConfiguration config)
     {
+        // LocalRedirect("~/...") resolve o PathBase (/tmsweb) — Redirect("/")
+        // perde o prefixo e gera loop sob sub-caminho.
         if (!Enabled(config))
-            return Results.Redirect("/auth/required");
+            return Results.LocalRedirect("~/auth/required");
 
         var email      = config.GetValue("Auth:DevUserEmail", "demo@zenatur.local")!;
         var externalId = config.GetValue("Auth:DevUserExternalId", "DEMO_USER")!;
@@ -36,7 +38,10 @@ public static class DevLoginEndpoint
             ExpiresAt:  DateTime.UtcNow.AddHours(12),
             Nonce:      Guid.NewGuid().ToString("N"));
 
-        await userService.EnsureExistsAsync(payload);
+        // Best-effort: dependência indisponível (CIOT/DB) não pode lançar e
+        // cair no /Error → re-challenge → loop de login.
+        try { await userService.EnsureExistsAsync(payload); }
+        catch { /* segue: login de apresentação não depende disso */ }
 
         var claims = new[]
         {
@@ -48,6 +53,6 @@ public static class DevLoginEndpoint
             new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
 
         await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
-        return Results.Redirect("/");
+        return Results.LocalRedirect("~/");
     }
 }

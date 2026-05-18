@@ -16,11 +16,11 @@ public static class ExternalLoginEndpoint
         var token = form["token"].FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(token))
-            return Results.Redirect("/auth/error?reason=missing_token");
+            return Results.LocalRedirect("~/auth/required?reason=missing_token");
 
         var payload = tokenValidator.Validate(token);
         if (payload is null)
-            return Results.Redirect("/auth/error?reason=invalid_token");
+            return Results.LocalRedirect("~/auth/required?reason=invalid_token");
 
         await userService.EnsureExistsAsync(payload);
 
@@ -36,6 +36,6 @@ public static class ExternalLoginEndpoint
 
         await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-        return Results.Redirect("/");
+        return Results.LocalRedirect("~/");
     }
 }
