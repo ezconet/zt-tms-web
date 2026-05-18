@@ -44,6 +44,12 @@ builder.Services.AddTmsInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
+// Publicado sob sub-caminho no IIS (ex.: /TMSWeb). Sem isto roteamento e
+// assets só funcionam na raiz. Ver também <base href> em App.razor.
+var pathBase = builder.Configuration["PathBase"];
+if (!string.IsNullOrWhiteSpace(pathBase))
+    app.UsePathBase(pathBase);
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
