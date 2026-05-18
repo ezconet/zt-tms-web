@@ -30,6 +30,27 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.AccessDeniedPath  = loginPath;
         options.ExpireTimeSpan    = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
+
+        // Cookie Path raiz: sob sub-caminho o default vira "/TMSWeb" e o
+        // browser (case-sensitive em path) não reenvia o cookie ao acessar
+        // "/tmsweb" → loop de login. "/" resolve independente de caixa.
+        options.Cookie.Path     = "/";
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+
+        // Anti-loop: challenge a partir de /Error ou /auth/* não acumula
+        // ReturnUrl (estourava o query string → 404.15).
+        options.Events.OnRedirectToLogin = ctx =>
+        {
+            var path = ctx.Request.Path.Value ?? string.Empty;
+            if (path.Contains("/Error", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("/auth/", StringComparison.OrdinalIgnoreCase))
+                // sem ReturnUrl: login puro, com prefixo PathBase
+                ctx.Response.Redirect(ctx.Request.PathBase + ctx.Options.LoginPath);
+            else
+                ctx.Response.Redirect(ctx.RedirectUri);
+            return Task.CompletedTask;
+        };
     });
 
 builder.Services.AddAuthorization(o =>
